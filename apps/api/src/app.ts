@@ -1,10 +1,11 @@
-import env from "./config/env";
-import express, {Request, Response, NextFunction} from "express";
+import env from "./config/env.js";
+import express from "express";
+import type {Request, Response, NextFunction} from "express";
 import cors from "cors";
 import helmet from "helmet";
 
-import healthRouter from "./routes/health";
-import {connectRedis} from "./lib/redis";
+import healthRouter from "./routes/health.js";
+import {connectRedis} from "./lib/redis.js";
 
 const app = express();
 

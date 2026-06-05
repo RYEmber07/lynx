@@ -1,6 +1,7 @@
-import {Router, Request, Response} from "express";
-import prisma from "../lib/db";
-import redis from "../lib/redis";
+import { Router } from "express";
+import type { Request, Response } from "express";
+import prisma from "../lib/db.js";
+import redis from "../lib/redis.js";
 
 const router = Router();
 
