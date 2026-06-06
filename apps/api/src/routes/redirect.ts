@@ -22,7 +22,13 @@ router.get("/:code", async (req: Request, res: Response) => {
     throw err;
   }
 
-  res.redirect(url.originalUrl);
+  // 302 temporary redirect - intentional.
+  // 301 gets cached permanently by browsers, meaning URL updates
+  // would never be seen by returning users. 302 ensures every
+  // redirect hits our server, keeping analytics accurate and
+  // allowing URL edits to take effect immediately.
+  // TODO: consider making redirect type configurable per-URL in future
+  res.redirect(302, url.originalUrl);
 });
 
 export default router;

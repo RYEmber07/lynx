@@ -1,3 +1,4 @@
+import env from "../config/env.js";
 import prisma from "../lib/db.js";
 import { generateShortCode, DEFAULT_CODE_LENGTH } from "../utils/shortCode.js";
 import type { UrlModel } from "../generated/prisma/models/Url.js";
@@ -31,6 +32,11 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
     passwordHash,
   } = input;
 
+  // TODO: deep cycle detection deferred; relying on browser redirect limits and Day 8 rate limiting
+  if (originalUrl.includes(env.FRONTEND_URL)) {
+    throw new Error("Cannot shorten a link that points back to this service.");
+  }
+
   // 1. Validate customSlug uniqueness if provided
   if (customSlug !== undefined) {
     const existing = await prisma.url.findFirst({
@@ -42,7 +48,9 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
       },
     });
     if (existing !== null) {
-      throw new Error("Custom slug already taken");
+      const err = new Error("Custom slug already taken") as any;
+      err.statusCode = 400;
+      throw err;
     }
   }
 

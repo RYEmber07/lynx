@@ -1,5 +1,5 @@
-import { Router } from "express";
-import type { Request, Response } from "express";
+import {Router} from "express";
+import type {Request, Response} from "express";
 import {
   createUrl,
   getUrlsByUserId,
@@ -8,6 +8,9 @@ import {
 
 const router = Router();
 
+// TEMP: X-User-Id header used as auth placeholder for local testing.
+// TODO Day 5: remove entirely — replace with req.user from JWT middleware.
+// Never leave this in production — it allows anyone to spoof any userId
 /**
  * Extracts the X-User-Id header from the request.
  * Throws a 400 error if the header is missing or not a string.
@@ -32,23 +35,37 @@ function extractUserId(req: Request): string {
  */
 router.post("/", async (req: Request, res: Response) => {
   const userId = extractUserId(req);
-  const { originalUrl, customSlug, expiresAt, isPasswordProtected, passwordHash } =
-    req.body as {
-      originalUrl: string;
-      customSlug?: string;
-      expiresAt?: string;
-      isPasswordProtected?: boolean;
-      passwordHash?: string;
-    };
+  const {
+    originalUrl,
+    customSlug,
+    expiresAt,
+    isPasswordProtected,
+    passwordHash,
+  } = req.body as {
+    originalUrl: string;
+    customSlug?: string;
+    expiresAt?: string;
+    isPasswordProtected?: boolean;
+    passwordHash?: string;
+  };
+
+  // Validate that originalUrl is a well-formed absolute URL
+  try {
+    new URL(originalUrl);
+  } catch {
+    const err = new Error("Invalid URL format") as any;
+    err.statusCode = 400;
+    throw err;
+  }
 
   try {
     const url = await createUrl({
       originalUrl,
       userId,
-      ...(customSlug !== undefined && { customSlug }),
-      ...(expiresAt !== undefined && { expiresAt: new Date(expiresAt) }),
-      ...(isPasswordProtected !== undefined && { isPasswordProtected }),
-      ...(passwordHash !== undefined && { passwordHash }),
+      ...(customSlug !== undefined && {customSlug}),
+      ...(expiresAt !== undefined && {expiresAt: new Date(expiresAt)}),
+      ...(isPasswordProtected !== undefined && {isPasswordProtected}),
+      ...(passwordHash !== undefined && {passwordHash}),
     });
     res.status(201).json(url);
   } catch (err: any) {
@@ -79,7 +96,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
 
   try {
     await deleteUrl(id, userId);
-    res.status(200).json({ success: true });
+    res.status(204).send();
   } catch (err: any) {
     if (err.message === "URL not found") {
       err.statusCode = 404;
