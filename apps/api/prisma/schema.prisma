@@ -39,7 +39,6 @@ model Url {
   clicks              Click[]
 
   @@index([userId])
-  @@index([shortCode])
   @@index([customSlug])
 }
 
@@ -69,5 +68,4 @@ model RefreshToken {
   createdAt  DateTime @default(now())
 
   @@index([userId])
-  @@index([tokenHash])
 }

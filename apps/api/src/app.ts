@@ -5,6 +5,8 @@ import cors from "cors";
 import helmet from "helmet";
 
 import healthRouter from "./routes/health.js";
+import urlRouter from "./routes/url.js";
+import redirectRouter from "./routes/redirect.js";
 import {connectRedis} from "./lib/redis.js";
 
 const app = express();
@@ -17,6 +19,8 @@ app.use(express.urlencoded({extended: true}));
 
 // Mount routes
 app.use("/api/health", healthRouter);
+app.use("/api/urls", urlRouter);
+app.use("/", redirectRouter);
 
 // 404 Fallback Handler
 app.use((req: Request, res: Response, next: NextFunction) => {
