@@ -8,33 +8,13 @@ import {
 
 const router = Router();
 
-// TEMP: X-User-Id header used as auth placeholder for local testing.
-// TODO Day 5: remove entirely — replace with req.user from JWT middleware.
-// Never leave this in production — it allows anyone to spoof any userId
-/**
- * Extracts the X-User-Id header from the request.
- * Throws a 400 error if the header is missing or not a string.
- *
- * @param req - The Express request object.
- * @returns The userId string.
- */
-function extractUserId(req: Request): string {
-  const userId = req.headers["x-user-id"];
-  if (typeof userId !== "string" || userId.trim() === "") {
-    const err = new Error("Missing X-User-Id header") as any;
-    err.statusCode = 400;
-    throw err;
-  }
-  return userId;
-}
-
 /**
  * POST /api/urls
- * Creates a new shortened URL.
+ * Creates a new shortened URL for the authenticated user.
  * Expects: { originalUrl, customSlug?, expiresAt?, isPasswordProtected?, passwordHash? }
  */
 router.post("/", async (req: Request, res: Response) => {
-  const userId = extractUserId(req);
+  const userId = req.user!.userId;
   const {
     originalUrl,
     customSlug,
@@ -53,9 +33,7 @@ router.post("/", async (req: Request, res: Response) => {
   try {
     new URL(originalUrl);
   } catch {
-    const err = new Error("Invalid URL format") as any;
-    err.statusCode = 400;
-    throw err;
+    throw Object.assign(new Error("Invalid URL format"), { statusCode: 400 });
   }
 
   try {
@@ -70,7 +48,7 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(201).json(url);
   } catch (err: any) {
     if (err.message === "Custom slug already taken") {
-      err.statusCode = 400;
+      throw Object.assign(err, { statusCode: 400 });
     }
     throw err;
   }
@@ -81,7 +59,7 @@ router.post("/", async (req: Request, res: Response) => {
  * Returns all URLs belonging to the authenticated user.
  */
 router.get("/", async (req: Request, res: Response) => {
-  const userId = extractUserId(req);
+  const userId = req.user!.userId;
   const urls = await getUrlsByUserId(userId);
   res.status(200).json(urls);
 });
@@ -92,16 +70,16 @@ router.get("/", async (req: Request, res: Response) => {
  */
 router.delete("/:id", async (req: Request, res: Response) => {
   const id = req.params["id"] as string;
-  const userId = extractUserId(req);
+  const userId = req.user!.userId;
 
   try {
     await deleteUrl(id, userId);
     res.status(204).send();
   } catch (err: any) {
     if (err.message === "URL not found") {
-      err.statusCode = 404;
+      throw Object.assign(err, { statusCode: 404 });
     } else if (err.message === "Unauthorized") {
-      err.statusCode = 403;
+      throw Object.assign(err, { statusCode: 403 });
     }
     throw err;
   }

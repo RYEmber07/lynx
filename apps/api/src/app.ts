@@ -3,23 +3,28 @@ import express from "express";
 import type {Request, Response, NextFunction} from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 
 import healthRouter from "./routes/health.js";
 import urlRouter from "./routes/url.js";
 import redirectRouter from "./routes/redirect.js";
+import authRouter from "./routes/auth.js";
+import {authenticate} from "./middleware/auth.middleware.js";
 import {connectRedis} from "./lib/redis.js";
 
 const app = express();
 
 // Standard middleware
 app.use(helmet());
-app.use(cors({origin: env.FRONTEND_URL}));
+app.use(cors({origin: env.FRONTEND_URL, credentials: true}));
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
+app.use(cookieParser());
 
 // Mount routes
 app.use("/api/health", healthRouter);
-app.use("/api/urls", urlRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/urls", authenticate, urlRouter);
 app.use("/", redirectRouter);
 
 // 404 Fallback Handler

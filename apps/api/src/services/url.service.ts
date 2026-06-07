@@ -48,9 +48,7 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
       },
     });
     if (existing !== null) {
-      const err = new Error("Custom slug already taken") as any;
-      err.statusCode = 400;
-      throw err;
+      throw Object.assign(new Error("Custom slug already taken"), { statusCode: 400 });
     }
   }
 

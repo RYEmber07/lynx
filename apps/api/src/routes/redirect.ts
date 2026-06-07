@@ -17,9 +17,7 @@ router.get("/:code", async (req: Request, res: Response) => {
   const url = await getUrlByCode(code);
 
   if (url === null) {
-    const err = new Error("URL not found") as any;
-    err.statusCode = 404;
-    throw err;
+    throw Object.assign(new Error("URL not found"), { statusCode: 404 });
   }
 
   // 302 temporary redirect - intentional.
