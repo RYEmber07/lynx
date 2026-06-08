@@ -21,6 +21,7 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().min(1, "FRONTEND_URL is required"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
+  CACHE_TTL_SECONDS: z.coerce.number().default(3600),
 });
 
 // Safely parse process.env

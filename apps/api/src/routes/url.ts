@@ -94,7 +94,7 @@ router.patch("/:id", verifyUrlOwnership, async (req: Request, res: Response) => 
     ...(customSlug !== undefined && {customSlug}),
     ...(expiresAt !== undefined && {expiresAt: expiresAt === null ? null : new Date(expiresAt)}),
     ...(isActive !== undefined && {isActive}),
-  });
+  }, targetUrl);
   res.status(200).json(updated);
 });
 
@@ -105,7 +105,7 @@ router.patch("/:id", verifyUrlOwnership, async (req: Request, res: Response) => 
 router.delete("/:id", verifyUrlOwnership, async (req: Request, res: Response) => {
   const targetUrl = req.targetUrl!;
   try {
-    await deleteUrl(targetUrl.id);
+    await deleteUrl(targetUrl);
     res.status(204).send();
   } catch (err: any) {
     if (err.message === "URL not found") {

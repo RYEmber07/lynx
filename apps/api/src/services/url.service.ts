@@ -2,6 +2,7 @@ import env from "../config/env.js";
 import prisma from "../lib/db.js";
 import {generateShortCode, DEFAULT_CODE_LENGTH} from "../utils/shortCode.js";
 import type {UrlModel} from "../generated/prisma/models/Url.js";
+import {setCache, getCache, deleteCache, cacheKey} from "../lib/redis.js";
 
 // Re-export the generated model type under the conventional name
 export type Url = UrlModel;
@@ -22,9 +23,39 @@ export type CreateUrlInput = {
   passwordHash?: string;
 };
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Caches a Url record under both its shortCode and (if present) its customSlug.
+ */
+async function cacheUrl(url: Url): Promise<void> {
+  const serialized = JSON.stringify(url);
+  await setCache(cacheKey("url", url.shortCode), serialized, env.CACHE_TTL_SECONDS);
+  if (url.customSlug !== null) {
+    await setCache(cacheKey("url", url.customSlug), serialized, env.CACHE_TTL_SECONDS);
+  }
+}
+
+/**
+ * Removes cache entries for a Url record by shortCode and (if present) customSlug.
+ */
+async function evictUrl(url: Url): Promise<void> {
+  await deleteCache(cacheKey("url", url.shortCode));
+  if (url.customSlug !== null) {
+    await deleteCache(cacheKey("url", url.customSlug));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Service functions
+// ---------------------------------------------------------------------------
+
 /**
  * Generates a unique short code and creates a new URL record.
  * Handles collision retries automatically.
+ * Warms the cache on write so the first redirect is served from Redis.
  *
  * @param input - The CreateUrlInput object containing original URL and user data.
  * @returns A promise that resolves to the created Url record.
@@ -80,8 +111,8 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
     throw new Error("Failed to generate unique short code");
   }
 
-  // 3. Persist and return the new URL record
-  return prisma.url.create({
+  // 3. Persist the new URL record
+  const url = await prisma.url.create({
     data: {
       originalUrl,
       userId,
@@ -92,20 +123,44 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
       ...(passwordHash !== undefined && {passwordHash}),
     },
   });
+
+  // 4. Warm the cache so the first redirect is served from Redis
+  await cacheUrl(url);
+
+  return url;
 }
 
+// Cache-aside pattern: check cache first, fall through to DB on miss,
+// populate cache on miss so next request is served from Redis.
 /**
  * Retrieves a URL record by its short code or custom slug.
+ * Checks Redis before hitting the database.
  *
  * @param code - The short code or custom slug to search.
  * @returns A promise that resolves to the Url record, or null if not found.
  */
 export async function getUrlByCode(code: string): Promise<Url | null> {
-  return prisma.url.findFirst({
+  const key = cacheKey("url", code);
+
+  // 1. Cache hit - parse and return immediately
+  const cached = await getCache(key);
+  if (cached !== null) {
+    return JSON.parse(cached) as Url;
+  }
+
+  // 2. Cache miss - query the DB
+  const url = await prisma.url.findFirst({
     where: {
       OR: [{shortCode: code}, {customSlug: code}],
     },
   });
+
+  // 3. Populate cache for future requests
+  if (url !== null) {
+    await setCache(key, JSON.stringify(url), env.CACHE_TTL_SECONDS);
+  }
+
+  return url;
 }
 
 /**
@@ -122,43 +177,49 @@ export async function getUrlsByUserId(userId: string): Promise<Url[]> {
 }
 
 /**
- * Deletes a URL record by ID.
+ * Deletes a URL record and evicts its cache entries.
  *
- * Ownership and existence are verified upstream by the `verifyUrlOwnership`
- * middleware before this function is called.
+ * Accepts the already-fetched `Url` object from the `verifyUrlOwnership`
+ * middleware (`req.targetUrl`) to avoid a redundant DB round-trip.
  *
- * @param id - The ID of the URL record to delete.
+ * @param url - The URL record to delete (pre-fetched by middleware).
  * @returns A promise that resolves when deletion is complete.
  */
-export async function deleteUrl(id: string): Promise<void> {
+export async function deleteUrl(url: Url): Promise<void> {
   try {
-    await prisma.url.delete({where: {id}});
+    await prisma.url.delete({where: {id: url.id}});
   } catch (err: any) {
-    // If the record was already deleted (Prisma P2025 error code or similar),
-    // we can swallow it or throw a URL not found error. Throwing lets the route know.
+    // If the record was concurrently deleted between ownership check and here
+    // (P2025: record not found), surface a clean 404.
     if (err.code === "P2025") {
       throw Object.assign(new Error("URL not found"), {statusCode: 404});
     }
     throw err;
   }
+
+  // Evict cache only after a confirmed successful deletion
+  await evictUrl(url);
 }
 
 /**
- * Updates mutable fields on a URL record.
+ * Updates mutable fields on a URL record, then invalidates stale cache entries
+ * and re-caches the updated record.
  *
- * Ownership and existence are verified upstream by the `verifyUrlOwnership`
- * middleware before this function is called.
+ * Accepts the already-fetched `Url` object from the `verifyUrlOwnership`
+ * middleware (`req.targetUrl`) as `existing` to avoid a redundant DB round-trip
+ * when evicting stale cache keys (critical when customSlug is changed or removed).
  *
  * If `customSlug` is provided (non-null), validates that it is not already
  * taken by a *different* URL — both the `customSlug` and `shortCode` columns
  * are checked (shared namespace rule).
  *
- * @param id   - The ID of the URL record to update.
- * @param data - Partial update payload.
+ * @param id       - The ID of the URL record to update.
+ * @param data     - Partial update payload.
+ * @param existing - The current URL record state (pre-fetched by middleware).
  * @returns A promise that resolves to the updated Url record.
  * @throws {Error} With statusCode 409 if the requested customSlug is already taken.
  */
-export async function updateUrl(id: string, data: UpdateUrlInput): Promise<Url> {
+export async function updateUrl(id: string, data: UpdateUrlInput, existing: Url): Promise<Url> {
   const {originalUrl, customSlug, expiresAt, isActive} = data;
 
   // Validate customSlug uniqueness across the shared namespace, excluding self
@@ -176,7 +237,7 @@ export async function updateUrl(id: string, data: UpdateUrlInput): Promise<Url> 
     }
   }
 
-  return prisma.url.update({
+  const updated = await prisma.url.update({
     where: {id},
     data: {
       // null clears the field; a string value sets it; undefined = no change
@@ -186,4 +247,13 @@ export async function updateUrl(id: string, data: UpdateUrlInput): Promise<Url> 
       ...(isActive !== undefined && {isActive}),
     },
   });
+
+  // Evict stale cache entries for the pre-update record state.
+  // Using the caller-supplied `existing` avoids a redundant findUnique here.
+  await evictUrl(existing);
+
+  // Re-cache under the new codes
+  await cacheUrl(updated);
+
+  return updated;
 }
