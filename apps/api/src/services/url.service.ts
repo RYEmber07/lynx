@@ -1,10 +1,17 @@
 import env from "../config/env.js";
 import prisma from "../lib/db.js";
-import { generateShortCode, DEFAULT_CODE_LENGTH } from "../utils/shortCode.js";
-import type { UrlModel } from "../generated/prisma/models/Url.js";
+import {generateShortCode, DEFAULT_CODE_LENGTH} from "../utils/shortCode.js";
+import type {UrlModel} from "../generated/prisma/models/Url.js";
 
 // Re-export the generated model type under the conventional name
 export type Url = UrlModel;
+
+export type UpdateUrlInput = {
+  originalUrl?: string;
+  customSlug?: string | null;
+  expiresAt?: Date | null;
+  isActive?: boolean;
+};
 
 export type CreateUrlInput = {
   originalUrl: string;
@@ -41,14 +48,13 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
   if (customSlug !== undefined) {
     const existing = await prisma.url.findFirst({
       where: {
-        OR: [
-          { customSlug },
-          { shortCode: customSlug },
-        ],
+        OR: [{customSlug}, {shortCode: customSlug}],
       },
     });
     if (existing !== null) {
-      throw Object.assign(new Error("Custom slug already taken"), { statusCode: 400 });
+      throw Object.assign(new Error("Custom slug already taken"), {
+        statusCode: 400,
+      });
     }
   }
 
@@ -60,10 +66,7 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
     const candidate = generateShortCode(DEFAULT_CODE_LENGTH + attempt); // 6, 7, 8 …
     const collision = await prisma.url.findFirst({
       where: {
-        OR: [
-          { shortCode: candidate },
-          { customSlug: candidate },
-        ],
+        OR: [{shortCode: candidate}, {customSlug: candidate}],
       },
     });
 
@@ -83,10 +86,10 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
       originalUrl,
       userId,
       shortCode,
-      ...(customSlug !== undefined && { customSlug }),
-      ...(expiresAt !== undefined && { expiresAt }),
-      ...(isPasswordProtected !== undefined && { isPasswordProtected }),
-      ...(passwordHash !== undefined && { passwordHash }),
+      ...(customSlug !== undefined && {customSlug}),
+      ...(expiresAt !== undefined && {expiresAt}),
+      ...(isPasswordProtected !== undefined && {isPasswordProtected}),
+      ...(passwordHash !== undefined && {passwordHash}),
     },
   });
 }
@@ -100,10 +103,7 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
 export async function getUrlByCode(code: string): Promise<Url | null> {
   return prisma.url.findFirst({
     where: {
-      OR: [
-        { shortCode: code },
-        { customSlug: code },
-      ],
+      OR: [{shortCode: code}, {customSlug: code}],
     },
   });
 }
@@ -116,29 +116,74 @@ export async function getUrlByCode(code: string): Promise<Url | null> {
  */
 export async function getUrlsByUserId(userId: string): Promise<Url[]> {
   return prisma.url.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
+    where: {userId},
+    orderBy: {createdAt: "desc"},
   });
 }
 
 /**
- * Deletes a URL record by ID, verifying that it belongs to the requesting user.
+ * Deletes a URL record by ID.
  *
- * @param id - The ID of the URL record.
- * @param userId - The ID of the user requesting deletion.
+ * Ownership and existence are verified upstream by the `verifyUrlOwnership`
+ * middleware before this function is called.
+ *
+ * @param id - The ID of the URL record to delete.
  * @returns A promise that resolves when deletion is complete.
- * @throws {Error} If the URL record does not exist or the user is unauthorized.
  */
-export async function deleteUrl(id: string, userId: string): Promise<void> {
-  const url = await prisma.url.findUnique({ where: { id } });
+export async function deleteUrl(id: string): Promise<void> {
+  try {
+    await prisma.url.delete({where: {id}});
+  } catch (err: any) {
+    // If the record was already deleted (Prisma P2025 error code or similar),
+    // we can swallow it or throw a URL not found error. Throwing lets the route know.
+    if (err.code === "P2025") {
+      throw Object.assign(new Error("URL not found"), {statusCode: 404});
+    }
+    throw err;
+  }
+}
 
-  if (url === null) {
-    throw new Error("URL not found");
+/**
+ * Updates mutable fields on a URL record.
+ *
+ * Ownership and existence are verified upstream by the `verifyUrlOwnership`
+ * middleware before this function is called.
+ *
+ * If `customSlug` is provided (non-null), validates that it is not already
+ * taken by a *different* URL — both the `customSlug` and `shortCode` columns
+ * are checked (shared namespace rule).
+ *
+ * @param id   - The ID of the URL record to update.
+ * @param data - Partial update payload.
+ * @returns A promise that resolves to the updated Url record.
+ * @throws {Error} With statusCode 409 if the requested customSlug is already taken.
+ */
+export async function updateUrl(id: string, data: UpdateUrlInput): Promise<Url> {
+  const {originalUrl, customSlug, expiresAt, isActive} = data;
+
+  // Validate customSlug uniqueness across the shared namespace, excluding self
+  if (customSlug !== undefined && customSlug !== null) {
+    const conflict = await prisma.url.findFirst({
+      where: {
+        AND: [
+          {id: {not: id}},
+          {OR: [{customSlug}, {shortCode: customSlug}]},
+        ],
+      },
+    });
+    if (conflict !== null) {
+      throw Object.assign(new Error("Custom slug already taken"), {statusCode: 409});
+    }
   }
 
-  if (url.userId !== userId) {
-    throw new Error("Unauthorized");
-  }
-
-  await prisma.url.delete({ where: { id } });
+  return prisma.url.update({
+    where: {id},
+    data: {
+      // null clears the field; a string value sets it; undefined = no change
+      ...(originalUrl !== undefined && {originalUrl}),
+      ...(customSlug !== undefined && {customSlug}),
+      ...(expiresAt !== undefined && {expiresAt}),
+      ...(isActive !== undefined && {isActive}),
+    },
+  });
 }

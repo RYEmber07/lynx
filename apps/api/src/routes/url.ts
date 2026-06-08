@@ -4,7 +4,9 @@ import {
   createUrl,
   getUrlsByUserId,
   deleteUrl,
+  updateUrl,
 } from "../services/url.service.js";
+import { verifyUrlOwnership } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
@@ -65,21 +67,49 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/urls/:id
- * Deletes a URL by ID, verifying ownership.
+ * PATCH /api/urls/:id
+ * Updates mutable fields of a URL. Ownership is verified by the verifyUrlOwnership middleware.
+ * Accepts: { originalUrl?, customSlug?, expiresAt?, isActive? }
  */
-router.delete("/:id", async (req: Request, res: Response) => {
-  const id = req.params["id"] as string;
-  const userId = req.user!.userId;
+router.patch("/:id", verifyUrlOwnership, async (req: Request, res: Response) => {
+  const targetUrl = req.targetUrl!;
+  const {originalUrl, customSlug, expiresAt, isActive} = req.body as {
+    originalUrl?: string;
+    customSlug?: string | null;
+    expiresAt?: string | null;
+    isActive?: boolean;
+  };
 
+  // Validate originalUrl format if provided
+  if (originalUrl !== undefined) {
+    try {
+      new URL(originalUrl);
+    } catch {
+      throw Object.assign(new Error("Invalid URL format"), {statusCode: 400});
+    }
+  }
+
+  const updated = await updateUrl(targetUrl.id, {
+    ...(originalUrl !== undefined && {originalUrl}),
+    ...(customSlug !== undefined && {customSlug}),
+    ...(expiresAt !== undefined && {expiresAt: expiresAt === null ? null : new Date(expiresAt)}),
+    ...(isActive !== undefined && {isActive}),
+  });
+  res.status(200).json(updated);
+});
+
+/**
+ * DELETE /api/urls/:id
+ * Deletes a URL by ID. Ownership is verified by the verifyUrlOwnership middleware.
+ */
+router.delete("/:id", verifyUrlOwnership, async (req: Request, res: Response) => {
+  const targetUrl = req.targetUrl!;
   try {
-    await deleteUrl(id, userId);
+    await deleteUrl(targetUrl.id);
     res.status(204).send();
   } catch (err: any) {
     if (err.message === "URL not found") {
       throw Object.assign(err, { statusCode: 404 });
-    } else if (err.message === "Unauthorized") {
-      throw Object.assign(err, { statusCode: 403 });
     }
     throw err;
   }

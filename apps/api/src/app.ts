@@ -36,14 +36,25 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Global Centralized Error Handling Middleware
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error("Unhandled Error:", err);
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
-    status: "error",
-    message: err.message || "Internal Server Error",
-    ...(env.NODE_ENV === "development" && {stack: err.stack}),
-  });
+// IMPORTANT: must remain the last middleware registered.
+app.use((err: Error & {statusCode?: number}, req: Request, res: Response, _next: NextFunction) => {
+  const statusCode = err.statusCode ?? 500;
+
+  // Always log the full error server-side (Winston replaces this on Day 19)
+  console.error(err);
+
+  if (env.NODE_ENV === "development") {
+    res.status(statusCode).json({error: err.message, stack: err.stack});
+    return;
+  }
+
+  // Production: never leak stack traces; hide internals for 500-class errors
+  if (statusCode >= 500) {
+    res.status(statusCode).json({error: "Internal server error"});
+    return;
+  }
+
+  res.status(statusCode).json({error: err.message});
 });
 
 // Initialize services and start server

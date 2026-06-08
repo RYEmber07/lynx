@@ -191,6 +191,12 @@ export async function login(
     throw new Error("Invalid credentials");
   }
 
+  // Passive cleanup: removes expired tokens on login.
+  // At scale, replace with a scheduled job (cron/BullMQ) to avoid adding latency to the login path.
+  void prisma.refreshToken.deleteMany({
+    where: {userId: user.id, expiresAt: {lt: new Date()}},
+  });
+
   const tokens = generateTokens({userId: user.id, email: user.email});
   await storeRefreshToken(user.id, tokens.refreshToken);
   return {tokens, user};
