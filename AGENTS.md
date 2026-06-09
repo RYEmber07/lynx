@@ -306,7 +306,7 @@ Defined in `src/config/env.ts` and validated with Zod at startup.
 | Variable | Type | Notes |
 |----------|------|-------|
 | `NODE_ENV` | `development \| production \| test` | defaults to `development` |
-| `PORT` | number | defaults to `3000` |
+| `PORT` | number | defaults to `4000` |
 | `DATABASE_URL` | string | Postgres connection string |
 | `REDIS_URL` | string | Redis connection string |
 | `JWT_SECRET` | string | min 32 chars |

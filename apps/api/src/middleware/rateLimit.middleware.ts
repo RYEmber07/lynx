@@ -14,6 +14,15 @@ export type RateLimiterConfig = {
   keyPrefix: string;
   /** Optional custom error message. Defaults to 'Too many requests'. */
   message?: string;
+  /**
+   * Optional function to extract the rate-limit identifier from the request.
+   * When provided, overrides the default IP-based extraction.
+   * Use this to rate-limit per user ID on authenticated routes.
+   *
+   * @example
+   * keyExtractor: (req) => req.user!.userId
+   */
+  keyExtractor?: (req: Request) => string;
 };
 
 // ---------------------------------------------------------------------------
@@ -42,16 +51,18 @@ export function createRateLimiter(config: RateLimiterConfig) {
   ): Promise<void> {
     // ---------------------------------------------------------------------------
     // Identify the client
-    // X-Forwarded-For is checked first to support a future Nginx reverse-proxy.
-    // Fall back to req.ip when the header is absent (direct connections).
+    // If a keyExtractor is provided in config, use it (e.g. for per-user limits
+    // on authenticated routes). Otherwise fall back to IP extraction:
+    // X-Forwarded-For is checked first to support a future Nginx reverse-proxy,
+    // then req.ip, then "unknown" as a last resort.
     // ---------------------------------------------------------------------------
-    const forwarded = req.headers["x-forwarded-for"];
-    const identifier =
-      (Array.isArray(forwarded)
-        ? forwarded[0]
-        : forwarded?.split(",")[0]?.trim()) ??
-      req.ip ??
-      "unknown";
+    const identifier = config.keyExtractor
+      ? config.keyExtractor(req)
+      : (Array.isArray(req.headers["x-forwarded-for"])
+          ? req.headers["x-forwarded-for"][0]
+          : req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ??
+        req.ip ??
+        "unknown";
 
     const key = `${keyPrefix}:${identifier}`;
     const now = Date.now();
@@ -123,28 +134,38 @@ export const redirectLimiter = createRateLimiter({
 });
 
 // Auth: brute force protection, tight limit, long window.
+// IP-based because no userId exists yet at login/register time.
+// Raised to 30/15min to avoid false-positives on shared NAT IPs (e.g. offices).
+// TODO: add per-account lockout (track failed attempts per email in Redis) for
+// proper brute-force protection that does not punish NAT neighbours.
 export const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 30,
   keyPrefix: "rl:auth",
   message: "Too many auth attempts, please try again later",
 });
 
 // Create: authenticated users, generous limit, prevents spam.
+// keyExtractor limits per user ID rather than IP so shared NAT/proxies
+// do not cause one user's burst to penalise others.
 export const createUrlLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 30,
   keyPrefix: "rl:create",
   message: "Too many URLs created, please slow down",
+  keyExtractor: (req) => req.user!.userId,
 });
 
 // URLs (general): all authenticated URL operations. A broad safety net that
 // prevents polling abuse and cache-churn attacks from compromised tokens.
+// keyExtractor limits per user ID so shared NAT/proxies do not cause one
+// user's burst to penalise others.
 export const urlsLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 120,
   keyPrefix: "rl:urls",
   message: "Too many requests, please slow down",
+  keyExtractor: (req) => req.user!.userId,
 });
 
 // Health: each request queries DB and Redis. A generous limit protects

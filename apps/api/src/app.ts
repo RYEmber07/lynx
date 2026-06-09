@@ -12,6 +12,7 @@ import authRouter from "./routes/auth.js";
 import {authenticate} from "./middleware/auth.middleware.js";
 import {redirectLimiter, authLimiter, urlsLimiter, healthLimiter} from "./middleware/rateLimit.middleware.js";
 import {connectRedis} from "./lib/redis.js";
+import {clickWorker} from "./workers/click.worker.js";
 
 const app = express();
 
@@ -63,6 +64,13 @@ const start = async () => {
   try {
     // Await Redis connection before starting
     await connectRedis();
+
+    // Initialize click worker - starts listening for jobs
+    // Importing clickWorker is sufficient to start it.
+    // BullMQ workers begin polling Redis for jobs on instantiation.
+    // In production, workers would run as separate processes/containers
+    // for independent scaling. For now, co-located with the API is fine.
+    clickWorker;
 
     app.listen(env.PORT, () => {
       console.log(`✅ Server is running on port ${env.PORT}`);
