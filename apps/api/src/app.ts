@@ -10,6 +10,7 @@ import urlRouter from "./routes/url.js";
 import redirectRouter from "./routes/redirect.js";
 import authRouter from "./routes/auth.js";
 import {authenticate} from "./middleware/auth.middleware.js";
+import {redirectLimiter, authLimiter, urlsLimiter, healthLimiter} from "./middleware/rateLimit.middleware.js";
 import {connectRedis} from "./lib/redis.js";
 
 const app = express();
@@ -22,10 +23,10 @@ app.use(express.urlencoded({extended: true}));
 app.use(cookieParser());
 
 // Mount routes
-app.use("/api/health", healthRouter);
-app.use("/api/auth", authRouter);
-app.use("/api/urls", authenticate, urlRouter);
-app.use("/", redirectRouter);
+app.use("/api/health", healthLimiter, healthRouter);
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/urls", authenticate, urlsLimiter, urlRouter);
+app.use("/", redirectLimiter, redirectRouter);
 
 // 404 Fallback Handler
 app.use((req: Request, res: Response, next: NextFunction) => {

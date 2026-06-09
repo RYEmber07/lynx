@@ -6,7 +6,8 @@ import {
   deleteUrl,
   updateUrl,
 } from "../services/url.service.js";
-import { verifyUrlOwnership } from "../middleware/auth.middleware.js";
+import {verifyUrlOwnership} from "../middleware/auth.middleware.js";
+import {createUrlLimiter} from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const router = Router();
  * Creates a new shortened URL for the authenticated user.
  * Expects: { originalUrl, customSlug?, expiresAt?, isPasswordProtected?, passwordHash? }
  */
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", createUrlLimiter, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const {
     originalUrl,

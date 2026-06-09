@@ -29,22 +29,33 @@ export type CreateUrlInput = {
 
 /**
  * Caches a Url record under both its shortCode and (if present) its customSlug.
+ * Fail open: if Redis is unavailable the write is silently skipped.
  */
 async function cacheUrl(url: Url): Promise<void> {
-  const serialized = JSON.stringify(url);
-  await setCache(cacheKey("url", url.shortCode), serialized, env.CACHE_TTL_SECONDS);
-  if (url.customSlug !== null) {
-    await setCache(cacheKey("url", url.customSlug), serialized, env.CACHE_TTL_SECONDS);
+  try {
+    const serialized = JSON.stringify(url);
+    await setCache(cacheKey("url", url.shortCode), serialized, env.CACHE_TTL_SECONDS);
+    if (url.customSlug !== null) {
+      await setCache(cacheKey("url", url.customSlug), serialized, env.CACHE_TTL_SECONDS);
+    }
+  } catch {
+    // Fail open: Redis unavailable - record is still in the DB.
   }
 }
 
 /**
  * Removes cache entries for a Url record by shortCode and (if present) customSlug.
+ * Fail open: if Redis is unavailable the eviction is skipped; stale entries will
+ * expire naturally via TTL.
  */
 async function evictUrl(url: Url): Promise<void> {
-  await deleteCache(cacheKey("url", url.shortCode));
-  if (url.customSlug !== null) {
-    await deleteCache(cacheKey("url", url.customSlug));
+  try {
+    await deleteCache(cacheKey("url", url.shortCode));
+    if (url.customSlug !== null) {
+      await deleteCache(cacheKey("url", url.customSlug));
+    }
+  } catch {
+    // Fail open: Redis unavailable - TTL will expire the stale entries.
   }
 }
 
@@ -143,9 +154,15 @@ export async function getUrlByCode(code: string): Promise<Url | null> {
   const key = cacheKey("url", code);
 
   // 1. Cache hit - parse and return immediately
-  const cached = await getCache(key);
-  if (cached !== null) {
-    return JSON.parse(cached) as Url;
+  // Fail open: if Redis is unavailable, fall through to DB.
+  // Prefer slower service over complete outage.
+  try {
+    const cached = await getCache(key);
+    if (cached !== null) {
+      return JSON.parse(cached) as Url;
+    }
+  } catch {
+    // Redis unavailable - continue to DB
   }
 
   // 2. Cache miss - query the DB
@@ -155,9 +172,13 @@ export async function getUrlByCode(code: string): Promise<Url | null> {
     },
   });
 
-  // 3. Populate cache for future requests
+  // 3. Populate cache for future requests (fail open: skip silently if Redis is down)
   if (url !== null) {
-    await setCache(key, JSON.stringify(url), env.CACHE_TTL_SECONDS);
+    try {
+      await setCache(key, JSON.stringify(url), env.CACHE_TTL_SECONDS);
+    } catch {
+      // Redis unavailable - next request will just be a cache miss again
+    }
   }
 
   return url;
