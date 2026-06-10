@@ -9,8 +9,8 @@ import healthRouter from "./routes/health.js";
 import urlRouter from "./routes/url.js";
 import redirectRouter from "./routes/redirect.js";
 import authRouter from "./routes/auth.js";
-import {authenticate} from "./middleware/auth.middleware.js";
-import {redirectLimiter, authLimiter, urlsLimiter, healthLimiter} from "./middleware/rateLimit.middleware.js";
+import analyticsRouter from "./routes/analytics.js";
+import {redirectLimiter, authLimiter, healthLimiter} from "./middleware/rateLimit.middleware.js";
 import {connectRedis} from "./lib/redis.js";
 import {clickWorker} from "./workers/click.worker.js";
 
@@ -26,7 +26,8 @@ app.use(cookieParser());
 // Mount routes
 app.use("/api/health", healthLimiter, healthRouter);
 app.use("/api/auth", authLimiter, authRouter);
-app.use("/api/urls", authenticate, urlsLimiter, urlRouter);
+app.use("/api/urls", urlRouter);
+app.use("/api/urls", analyticsRouter);
 app.use("/", redirectLimiter, redirectRouter);
 
 // 404 Fallback Handler

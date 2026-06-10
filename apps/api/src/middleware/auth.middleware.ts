@@ -91,39 +91,6 @@ export async function authenticate(
 }
 
 /**
- * Optionally reads a JWT access token from the `Authorization: Bearer <token>` header.
- *
- * If the token is present and valid, attaches the decoded `TokenPayload` to
- * `req.user`. If the token is missing, malformed, or expired, the error is
- * silently swallowed and `req.user` remains `undefined`.
- *
- * Always calls `next()` — this middleware never short-circuits the request.
- * Useful for routes that serve both anonymous and authenticated users differently.
- *
- * @param req - Express request object.
- * @param res - Express response object (unused; required by middleware signature).
- * @param next - Express next function.
- */
-export function optionalAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  const token = extractBearerToken(req);
-
-  if (token !== null) {
-    try {
-      const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as TokenPayload;
-      req.user = payload;
-    } catch {
-      // Swallow, missing or invalid token is acceptable for optional auth
-    }
-  }
-
-  next();
-}
-
-/**
  * Verifies that the authenticated user owns the URL identified by `req.params.id`.
  *
  * Must be placed after `authenticate` in the middleware chain, as it relies on

@@ -6,10 +6,21 @@ import {
   deleteUrl,
   updateUrl,
 } from "../services/url.service.js";
-import {verifyUrlOwnership} from "../middleware/auth.middleware.js";
-import {createUrlLimiter} from "../middleware/rateLimit.middleware.js";
+import {
+  authenticate,
+  verifyUrlOwnership,
+} from "../middleware/auth.middleware.js";
+import {
+  createUrlLimiter,
+  urlsLimiter,
+} from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
+
+// All URL routes require authentication, then per-user rate limiting.
+// Order matters: authenticate must run first to populate req.user,
+// which urlsLimiter's keyExtractor depends on.
+router.use(authenticate, urlsLimiter);
 
 /**
  * POST /api/urls
@@ -36,7 +47,7 @@ router.post("/", createUrlLimiter, async (req: Request, res: Response) => {
   try {
     new URL(originalUrl);
   } catch {
-    throw Object.assign(new Error("Invalid URL format"), { statusCode: 400 });
+    throw Object.assign(new Error("Invalid URL format"), {statusCode: 400});
   }
 
   try {
@@ -51,7 +62,7 @@ router.post("/", createUrlLimiter, async (req: Request, res: Response) => {
     res.status(201).json(url);
   } catch (err: any) {
     if (err.message === "Custom slug already taken") {
-      throw Object.assign(err, { statusCode: 400 });
+      throw Object.assign(err, {statusCode: 400});
     }
     throw err;
   }
@@ -72,48 +83,62 @@ router.get("/", async (req: Request, res: Response) => {
  * Updates mutable fields of a URL. Ownership is verified by the verifyUrlOwnership middleware.
  * Accepts: { originalUrl?, customSlug?, expiresAt?, isActive? }
  */
-router.patch("/:id", verifyUrlOwnership, async (req: Request, res: Response) => {
-  const targetUrl = req.targetUrl!;
-  const {originalUrl, customSlug, expiresAt, isActive} = req.body as {
-    originalUrl?: string;
-    customSlug?: string | null;
-    expiresAt?: string | null;
-    isActive?: boolean;
-  };
+router.patch(
+  "/:id",
+  verifyUrlOwnership,
+  async (req: Request, res: Response) => {
+    const targetUrl = req.targetUrl!;
+    const {originalUrl, customSlug, expiresAt, isActive} = req.body as {
+      originalUrl?: string;
+      customSlug?: string | null;
+      expiresAt?: string | null;
+      isActive?: boolean;
+    };
 
-  // Validate originalUrl format if provided
-  if (originalUrl !== undefined) {
-    try {
-      new URL(originalUrl);
-    } catch {
-      throw Object.assign(new Error("Invalid URL format"), {statusCode: 400});
+    // Validate originalUrl format if provided
+    if (originalUrl !== undefined) {
+      try {
+        new URL(originalUrl);
+      } catch {
+        throw Object.assign(new Error("Invalid URL format"), {statusCode: 400});
+      }
     }
-  }
 
-  const updated = await updateUrl(targetUrl.id, {
-    ...(originalUrl !== undefined && {originalUrl}),
-    ...(customSlug !== undefined && {customSlug}),
-    ...(expiresAt !== undefined && {expiresAt: expiresAt === null ? null : new Date(expiresAt)}),
-    ...(isActive !== undefined && {isActive}),
-  }, targetUrl);
-  res.status(200).json(updated);
-});
+    const updated = await updateUrl(
+      targetUrl.id,
+      {
+        ...(originalUrl !== undefined && {originalUrl}),
+        ...(customSlug !== undefined && {customSlug}),
+        ...(expiresAt !== undefined && {
+          expiresAt: expiresAt === null ? null : new Date(expiresAt),
+        }),
+        ...(isActive !== undefined && {isActive}),
+      },
+      targetUrl,
+    );
+    res.status(200).json(updated);
+  },
+);
 
 /**
  * DELETE /api/urls/:id
  * Deletes a URL by ID. Ownership is verified by the verifyUrlOwnership middleware.
  */
-router.delete("/:id", verifyUrlOwnership, async (req: Request, res: Response) => {
-  const targetUrl = req.targetUrl!;
-  try {
-    await deleteUrl(targetUrl);
-    res.status(204).send();
-  } catch (err: any) {
-    if (err.message === "URL not found") {
-      throw Object.assign(err, { statusCode: 404 });
+router.delete(
+  "/:id",
+  verifyUrlOwnership,
+  async (req: Request, res: Response) => {
+    const targetUrl = req.targetUrl!;
+    try {
+      await deleteUrl(targetUrl);
+      res.status(204).send();
+    } catch (err: any) {
+      if (err.message === "URL not found") {
+        throw Object.assign(err, {statusCode: 404});
+      }
+      throw err;
     }
-    throw err;
-  }
-});
+  },
+);
 
 export default router;
