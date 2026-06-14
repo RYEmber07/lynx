@@ -4,6 +4,9 @@ import env from "../config/env.js";
 import type {TokenPayload} from "../services/auth.service.js";
 import type {Url} from "../services/url.service.js";
 import prisma from "../lib/db.js";
+import { z } from "zod";
+
+const cuidSchema = z.cuid2();
 
 // ---------------------------------------------------------------------------
 // Express type augmentation
@@ -96,6 +99,8 @@ export async function authenticate(
  * Must be placed after `authenticate` in the middleware chain, as it relies on
  * `req.user` being populated.
  *
+ * Validates that `req.params.id` is a valid CUID format before hitting the DB.
+ *
  * On success, attaches the found URL record to `req.targetUrl` and calls `next()`.
  *
  * @param req  - Express request object. Must contain `params.id` and `user`.
@@ -109,6 +114,12 @@ export async function verifyUrlOwnership(
   next: NextFunction,
 ): Promise<void> {
   const id = req.params["id"] as string;
+
+  // Prevent useless DB calls for obviously malformed IDs
+  const parseResult = cuidSchema.safeParse(id);
+  if (!parseResult.success) {
+    return next(Object.assign(new Error("Invalid URL ID format"), {statusCode: 400}));
+  }
 
   const url = await prisma.url.findUnique({where: {id}});
 

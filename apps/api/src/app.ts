@@ -31,7 +31,7 @@ app.use("/api/urls", analyticsRouter);
 app.use("/", redirectLimiter, redirectRouter);
 
 // 404 Fallback Handler
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((_req: Request, res: Response, _next: NextFunction) => {
   res.status(404).json({
     status: "error",
     message: "Route not found",
@@ -40,25 +40,34 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Global Centralized Error Handling Middleware
 // IMPORTANT: must remain the last middleware registered.
-app.use((err: Error & {statusCode?: number}, req: Request, res: Response, _next: NextFunction) => {
-  const statusCode = err.statusCode ?? 500;
+app.use(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const statusCode = err.statusCode ?? 500;
 
-  // Always log the full error server-side (Winston replaces this on Day 19)
-  console.error(err);
+    // Always log the full error server-side (Winston replaces this on Day 19)
+    console.error(err);
 
-  if (env.NODE_ENV === "development") {
-    res.status(statusCode).json({error: err.message, stack: err.stack});
-    return;
-  }
+    const devExtra = env.NODE_ENV === "development" ? {stack: err.stack} : {};
 
-  // Production: never leak stack traces; hide internals for 500-class errors
-  if (statusCode >= 500) {
-    res.status(statusCode).json({error: "Internal server error"});
-    return;
-  }
+    // Validation error - keyed on the isValidationError tag set by the
+    // validate middleware; surfaces the flat fieldErrors map to the client.
+    if (err.isValidationError === true) {
+      res
+        .status(statusCode)
+        .json({error: "Validation failed", errors: err.errors, ...devExtra});
+      return;
+    }
 
-  res.status(statusCode).json({error: err.message});
-});
+    // Production: never leak stack traces; hide internals for 500-class errors
+    if (statusCode >= 500 && env.NODE_ENV === "production") {
+      res.status(statusCode).json({error: "Internal server error"});
+      return;
+    }
+
+    res.status(statusCode).json({error: err.message, ...devExtra});
+  },
+);
 
 // Initialize services and start server
 const start = async () => {

@@ -1,7 +1,14 @@
 import {Router} from "express";
 import type {Request, Response} from "express";
 import {getUrlByCode} from "../services/url.service.js";
-import {clickQueue, type ClickJobData} from "../queues/click.queue.js";
+import {clickQueue} from "../queues/click.queue.js";
+import { z } from "zod";
+
+const codeSchema = z
+  .string()
+  .min(3)
+  .max(50)
+  .regex(/^[a-zA-Z0-9-_]+$/);
 
 const router = Router();
 
@@ -15,6 +22,12 @@ const router = Router();
  */
 router.get("/:code", async (req: Request, res: Response) => {
   const code = req.params["code"] as string;
+
+  // Prevent useless Redis/DB calls for obviously invalid paths
+  // (e.g. bots scanning for /.env or /wp-login.php)
+  if (!codeSchema.safeParse(code).success) {
+    throw Object.assign(new Error("URL not found"), {statusCode: 404});
+  }
 
   const url = await getUrlByCode(code);
 

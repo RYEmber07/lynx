@@ -3,25 +3,35 @@ import prisma from "../lib/db.js";
 import {generateShortCode, DEFAULT_CODE_LENGTH} from "../utils/shortCode.js";
 import type {UrlModel} from "../generated/prisma/models/Url.js";
 import {setCache, getCache, deleteCache, cacheKey} from "../lib/redis.js";
+import type {CreateUrlInput, UpdateUrlInput} from "../validators/url.validators.js";
 
 // Re-export the generated model type under the conventional name
 export type Url = UrlModel;
 
-export type UpdateUrlInput = {
-  originalUrl?: string;
-  customSlug?: string | null;
-  expiresAt?: Date | null;
-  isActive?: boolean;
-};
-
-export type CreateUrlInput = {
-  originalUrl: string;
+/**
+ * Internal shape expected by createUrl().
+ * Adapts Zod input for service use: drops plain password, adds userId and passwordHash,
+ * and converts the ISO expiresAt string to a JS Date.
+ */
+export type CreateUrlServiceInput = Omit<CreateUrlInput, "password" | "expiresAt" | "customSlug"> & {
   userId: string;
   customSlug?: string;
   expiresAt?: Date;
-  isPasswordProtected?: boolean;
   passwordHash?: string;
 };
+
+/**
+ * Internal shape expected by updateUrl().
+ * Drops plain-text `password` (route hashes it); adds `passwordHash`:
+ *   - string → set / change the hash
+ *   - null   → remove password protection
+ *   - undefined → leave unchanged
+ * Converts `expiresAt` ISO string to Date | null (null = clear the expiry).
+ */
+export type UpdateUrlServiceInput = Omit<UpdateUrlInput, "expiresAt" | "password"> & {
+  expiresAt?: Date | null;
+  passwordHash?: string | null;
+}; 
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,7 +81,7 @@ async function evictUrl(url: Url): Promise<void> {
  * @param input - The CreateUrlInput object containing original URL and user data.
  * @returns A promise that resolves to the created Url record.
  */
-export async function createUrl(input: CreateUrlInput): Promise<Url> {
+export async function createUrl(input: CreateUrlServiceInput): Promise<Url> {
   const {
     originalUrl,
     userId,
@@ -95,7 +105,7 @@ export async function createUrl(input: CreateUrlInput): Promise<Url> {
     });
     if (existing !== null) {
       throw Object.assign(new Error("Custom slug already taken"), {
-        statusCode: 400,
+        statusCode: 409,
       });
     }
   }
@@ -240,8 +250,8 @@ export async function deleteUrl(url: Url): Promise<void> {
  * @returns A promise that resolves to the updated Url record.
  * @throws {Error} With statusCode 409 if the requested customSlug is already taken.
  */
-export async function updateUrl(id: string, data: UpdateUrlInput, existing: Url): Promise<Url> {
-  const {originalUrl, customSlug, expiresAt, isActive} = data;
+export async function updateUrl(id: string, data: UpdateUrlServiceInput, existing: Url): Promise<Url> {
+  const {originalUrl, customSlug, expiresAt, isActive, passwordHash} = data;
 
   // Validate customSlug uniqueness across the shared namespace, excluding self
   if (customSlug !== undefined && customSlug !== null) {
@@ -261,11 +271,15 @@ export async function updateUrl(id: string, data: UpdateUrlInput, existing: Url)
   const updated = await prisma.url.update({
     where: {id},
     data: {
-      // null clears the field; a string value sets it; undefined = no change
       ...(originalUrl !== undefined && {originalUrl}),
       ...(customSlug !== undefined && {customSlug}),
       ...(expiresAt !== undefined && {expiresAt}),
       ...(isActive !== undefined && {isActive}),
+      // passwordHash: null -> clear protection; string → set/update hash
+      ...(passwordHash !== undefined && {
+        passwordHash,
+        isPasswordProtected: passwordHash !== null,
+      }),
     },
   });
 

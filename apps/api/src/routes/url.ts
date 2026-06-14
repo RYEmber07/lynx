@@ -1,5 +1,6 @@
 import {Router} from "express";
 import type {Request, Response} from "express";
+import bcrypt from "bcryptjs";
 import {
   createUrl,
   getUrlsByUserId,
@@ -14,6 +15,13 @@ import {
   createUrlLimiter,
   urlsLimiter,
 } from "../middleware/rateLimit.middleware.js";
+import {validate} from "../middleware/validate.middleware.js";
+import {
+  CreateUrlSchema,
+  UpdateUrlSchema,
+  type CreateUrlInput,
+  type UpdateUrlInput,
+} from "../validators/url.validators.js";
 
 const router = Router();
 
@@ -25,48 +33,30 @@ router.use(authenticate, urlsLimiter);
 /**
  * POST /api/urls
  * Creates a new shortened URL for the authenticated user.
- * Expects: { originalUrl, customSlug?, expiresAt?, isPasswordProtected?, passwordHash? }
+ * Expects: { originalUrl, customSlug?, expiresAt?, isPasswordProtected?, password? }
  */
-router.post("/", createUrlLimiter, async (req: Request, res: Response) => {
-  const userId = req.user!.userId;
-  const {
-    originalUrl,
-    customSlug,
-    expiresAt,
-    isPasswordProtected,
-    passwordHash,
-  } = req.body as {
-    originalUrl: string;
-    customSlug?: string;
-    expiresAt?: string;
-    isPasswordProtected?: boolean;
-    passwordHash?: string;
-  };
+router.post(
+  "/",
+  createUrlLimiter,
+  validate(CreateUrlSchema),
+  async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const {originalUrl, customSlug, expiresAt, isPasswordProtected, password} =
+      req.body as CreateUrlInput;
 
-  // Validate that originalUrl is a well-formed absolute URL
-  try {
-    new URL(originalUrl);
-  } catch {
-    throw Object.assign(new Error("Invalid URL format"), {statusCode: 400});
-  }
-
-  try {
+    // `!= null` intentionally catches both null and undefined:
+    // both mean "user didn't provide a value" for these nullable optional fields.
     const url = await createUrl({
       originalUrl,
       userId,
-      ...(customSlug !== undefined && {customSlug}),
-      ...(expiresAt !== undefined && {expiresAt: new Date(expiresAt)}),
-      ...(isPasswordProtected !== undefined && {isPasswordProtected}),
-      ...(passwordHash !== undefined && {passwordHash}),
+      isPasswordProtected,
+      ...(customSlug != null && {customSlug}),
+      ...(expiresAt != null && {expiresAt: new Date(expiresAt)}),
+      ...(isPasswordProtected && {passwordHash: await bcrypt.hash(password!, 10)}),
     });
     res.status(201).json(url);
-  } catch (err: any) {
-    if (err.message === "Custom slug already taken") {
-      throw Object.assign(err, {statusCode: 400});
-    }
-    throw err;
-  }
-});
+  },
+);
 
 /**
  * GET /api/urls
@@ -81,27 +71,41 @@ router.get("/", async (req: Request, res: Response) => {
 /**
  * PATCH /api/urls/:id
  * Updates mutable fields of a URL. Ownership is verified by the verifyUrlOwnership middleware.
- * Accepts: { originalUrl?, customSlug?, expiresAt?, isActive? }
+ * Accepts: { originalUrl?, customSlug?, expiresAt?, isActive?, isPasswordProtected?, password? }
  */
 router.patch(
   "/:id",
   verifyUrlOwnership,
+  validate(UpdateUrlSchema),
   async (req: Request, res: Response) => {
     const targetUrl = req.targetUrl!;
-    const {originalUrl, customSlug, expiresAt, isActive} = req.body as {
-      originalUrl?: string;
-      customSlug?: string | null;
-      expiresAt?: string | null;
-      isActive?: boolean;
-    };
+    const {
+      originalUrl,
+      customSlug,
+      expiresAt,
+      isActive,
+      isPasswordProtected,
+      password,
+    } = req.body as UpdateUrlInput;
 
-    // Validate originalUrl format if provided
-    if (originalUrl !== undefined) {
-      try {
-        new URL(originalUrl);
-      } catch {
-        throw Object.assign(new Error("Invalid URL format"), {statusCode: 400});
-      }
+    // Derive passwordHash for the service:
+    //   - isPasswordProtected=false (was protected) → null  (clear protection)
+    //   - password provided                          → bcrypt hash (set/change)
+    //   - enabling without password                  → 400 error
+    //   - everything else                            → undefined (no-op)
+    let passwordHash: string | null | undefined;
+    if (isPasswordProtected === false && targetUrl.isPasswordProtected) {
+      passwordHash = null;
+    } else if (password !== undefined) {
+      passwordHash = await bcrypt.hash(password, 10);
+    } else if (isPasswordProtected === true && !targetUrl.isPasswordProtected) {
+      throw Object.assign(
+        new Error("Password is required to enable protection"),
+        {
+          statusCode: 400,
+          isValidationError: true,
+        },
+      );
     }
 
     const updated = await updateUrl(
@@ -113,6 +117,7 @@ router.patch(
           expiresAt: expiresAt === null ? null : new Date(expiresAt),
         }),
         ...(isActive !== undefined && {isActive}),
+        ...(passwordHash !== undefined && {passwordHash}),
       },
       targetUrl,
     );
