@@ -52,17 +52,13 @@ export function createRateLimiter(config: RateLimiterConfig) {
     // ---------------------------------------------------------------------------
     // Identify the client
     // If a keyExtractor is provided in config, use it (e.g. for per-user limits
-    // on authenticated routes). Otherwise fall back to IP extraction:
-    // X-Forwarded-For is checked first to support a future Nginx reverse-proxy,
-    // then req.ip, then "unknown" as a last resort.
+    // on authenticated routes). Otherwise fall back to IP extraction.
+    // With 'trust proxy' configured in app.ts, req.ip correctly resolves
+    // the client's IP even behind a proxy like Nginx.
     // ---------------------------------------------------------------------------
     const identifier = config.keyExtractor
       ? config.keyExtractor(req)
-      : (Array.isArray(req.headers["x-forwarded-for"])
-          ? req.headers["x-forwarded-for"][0]
-          : req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ??
-        req.ip ??
-        "unknown";
+      : req.ip ?? "unknown";
 
     const key = `${keyPrefix}:${identifier}`;
     const now = Date.now();
@@ -176,4 +172,16 @@ export const healthLimiter = createRateLimiter({
   max: 60,
   keyPrefix: "rl:health",
   message: "Too many health check requests",
+});
+
+// Brute-force protection on password-protected links.
+// Keyed by IP + code combination: limits guesses against a single
+// link from a single source, without penalizing other users
+// guessing other links from the same shared IP (NAT).
+export const verifyPasswordLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,                   // 5 attempts per code per IP
+  keyPrefix: "rl:verify",
+  keyExtractor: (req) => `${req.ip ?? "unknown"}:${req.params["code"]}`,
+  message: "Too many incorrect attempts, please try again later",
 });

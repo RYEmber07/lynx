@@ -1,5 +1,6 @@
 import env from "../config/env.js";
 import prisma from "../lib/db.js";
+import bcrypt from "bcryptjs";
 import {generateShortCode, DEFAULT_CODE_LENGTH} from "../utils/shortCode.js";
 import type {UrlModel} from "../generated/prisma/models/Url.js";
 import {setCache, getCache, deleteCache, cacheKey} from "../lib/redis.js";
@@ -7,6 +8,9 @@ import type {CreateUrlInput, UpdateUrlInput} from "../validators/url.validators.
 
 // Re-export the generated model type under the conventional name
 export type Url = UrlModel;
+
+// Public-facing URL type: passwordHash is never sent to controllers/routes.
+export type SafeUrl = Omit<Url, "passwordHash">;
 
 /**
  * Internal shape expected by createUrl().
@@ -81,7 +85,7 @@ async function evictUrl(url: Url): Promise<void> {
  * @param input - The CreateUrlInput object containing original URL and user data.
  * @returns A promise that resolves to the created Url record.
  */
-export async function createUrl(input: CreateUrlServiceInput): Promise<Url> {
+export async function createUrl(input: CreateUrlServiceInput): Promise<SafeUrl> {
   const {
     originalUrl,
     userId,
@@ -148,7 +152,8 @@ export async function createUrl(input: CreateUrlServiceInput): Promise<Url> {
   // 4. Warm the cache so the first redirect is served from Redis
   await cacheUrl(url);
 
-  return url;
+  const {passwordHash: _hash, ...safeUrl} = url;
+  return safeUrl;
 }
 
 // Cache-aside pattern: check cache first, fall through to DB on miss,
@@ -200,10 +205,11 @@ export async function getUrlByCode(code: string): Promise<Url | null> {
  * @param userId - The ID of the user.
  * @returns A promise that resolves to an array of Url records.
  */
-export async function getUrlsByUserId(userId: string): Promise<Url[]> {
+export async function getUrlsByUserId(userId: string): Promise<SafeUrl[]> {
   return prisma.url.findMany({
     where: {userId},
     orderBy: {createdAt: "desc"},
+    omit: {passwordHash: true},
   });
 }
 
@@ -250,7 +256,7 @@ export async function deleteUrl(url: Url): Promise<void> {
  * @returns A promise that resolves to the updated Url record.
  * @throws {Error} With statusCode 409 if the requested customSlug is already taken.
  */
-export async function updateUrl(id: string, data: UpdateUrlServiceInput, existing: Url): Promise<Url> {
+export async function updateUrl(id: string, data: UpdateUrlServiceInput, existing: Url): Promise<SafeUrl> {
   const {originalUrl, customSlug, expiresAt, isActive, passwordHash} = data;
 
   // Validate customSlug uniqueness across the shared namespace, excluding self
@@ -290,5 +296,45 @@ export async function updateUrl(id: string, data: UpdateUrlServiceInput, existin
   // Re-cache under the new codes
   await cacheUrl(updated);
 
-  return updated;
+  const {passwordHash: _hash, ...safeUrl} = updated;
+  return safeUrl;
+}
+
+/**
+ * Verifies that a submitted password matches the one stored for a password-protected URL.
+ * Also checks that the URL exists, is active, and has not expired before comparing.
+ *
+ * @param code     - The short code or custom slug identifying the URL.
+ * @param password - The plain-text password submitted by the visitor.
+ * @returns A promise that resolves to the Url record if the password matches.
+ * @throws {Error} With statusCode 404 if no URL matches the code.
+ * @throws {Error} With statusCode 410 if the URL is inactive or expired.
+ * @throws {Error} With statusCode 400 if the URL is not password-protected.
+ * @throws {Error} With statusCode 401 if the password is incorrect.
+ */
+export async function verifyUrlPassword(code: string, password: string): Promise<SafeUrl> {
+  const url = await getUrlByCode(code);
+  if (url === null) {
+    throw Object.assign(new Error("URL not found"), {statusCode: 404});
+  }
+
+  if (!url.isActive) {
+    throw Object.assign(new Error("URL is no longer active"), {statusCode: 410});
+  }
+
+  if (url.expiresAt !== null && url.expiresAt < new Date()) {
+    throw Object.assign(new Error("URL has expired"), {statusCode: 410});
+  }
+
+  if (!url.isPasswordProtected || url.passwordHash === null) {
+    throw Object.assign(new Error("This URL is not password protected"), {statusCode: 400});
+  }
+
+  const isMatch = await bcrypt.compare(password, url.passwordHash);
+  if (!isMatch) {
+    throw Object.assign(new Error("Incorrect password"), {statusCode: 401});
+  }
+
+  const {passwordHash, ...safeUrl} = url;
+  return safeUrl;
 }

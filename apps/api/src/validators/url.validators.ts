@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSafeUrl } from "../utils/urlSafety.js";
 
 // ---------------------------------------------------------------------------
 // CreateUrlSchema
@@ -8,7 +9,8 @@ export const CreateUrlSchema = z
   .object({
     originalUrl: z
       .url("Must be a valid URL")
-      .max(2048, "URL must not exceed 2048 characters"),
+      .max(2048, "URL must not exceed 2048 characters")
+      .refine(isSafeUrl, "URL points to a restricted or internal address"),
 
     customSlug: z
       .string()
@@ -62,6 +64,7 @@ export const UpdateUrlSchema = z
     originalUrl: z
       .url("Must be a valid URL")
       .max(2048, "URL must not exceed 2048 characters")
+      .refine(isSafeUrl, "URL points to a restricted or internal address")
       .optional(),
 
     customSlug: z
@@ -124,3 +127,13 @@ export const AnalyticsQuerySchema = z.object({
 export type CreateUrlInput = z.infer<typeof CreateUrlSchema>;
 export type UpdateUrlInput = z.infer<typeof UpdateUrlSchema>;
 export type AnalyticsQuery = z.infer<typeof AnalyticsQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// VerifyPasswordSchema
+// ---------------------------------------------------------------------------
+
+export const VerifyPasswordSchema = z.object({
+  password: z.string().min(1, "Password is required"),
+});
+
+export type VerifyPasswordInput = z.infer<typeof VerifyPasswordSchema>;

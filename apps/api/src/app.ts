@@ -10,17 +10,47 @@ import urlRouter from "./routes/url.js";
 import redirectRouter from "./routes/redirect.js";
 import authRouter from "./routes/auth.js";
 import analyticsRouter from "./routes/analytics.js";
-import {redirectLimiter, authLimiter, healthLimiter} from "./middleware/rateLimit.middleware.js";
+import {
+  redirectLimiter,
+  authLimiter,
+  healthLimiter,
+} from "./middleware/rateLimit.middleware.js";
 import {connectRedis} from "./lib/redis.js";
 import {clickWorker} from "./workers/click.worker.js";
 
 const app = express();
 
+// Required once Lynx runs behind Nginx (Day 17+). Without this,
+// req.ip returns the proxy's IP for every request - breaking
+// per-IP rate limiting. 'trust proxy', 1 trusts the first proxy
+// hop (our own Nginx) to set X-Forwarded-For correctly.
+if (env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 // Standard middleware
-app.use(helmet());
-app.use(cors({origin: env.FRONTEND_URL, credentials: true}));
-app.use(express.json());
-app.use(express.urlencoded({extended: true}));
+// crossOriginResourcePolicy: 'cross-origin' allows the frontend
+// (a different origin) to receive API responses. Helmet's default
+// 'same-origin' would silently block those responses in the browser
+// even with CORS configured correctly - CORP and CORS are two
+// separate browser security mechanisms.
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {policy: "cross-origin"},
+  }),
+);
+app.use(
+  cors({
+    origin: env.FRONTEND_URL,
+    credentials: true,
+    methods: ["GET", "POST", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+// 10kb is generous for Lynx's payloads (URLs, slugs, passwords).
+// Prevents oversized-body DoS attempts.
+app.use(express.json({limit: "10kb"}));
+app.use(express.urlencoded({extended: true, limit: "10kb"}));
 app.use(cookieParser());
 
 // Mount routes
