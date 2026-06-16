@@ -21,6 +21,7 @@ const cookieOptions = {
   secure: env.NODE_ENV === "production",
   sameSite: "lax" as const,
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+  path: "/api/auth/refresh",
 };
 
 // ---------------------------------------------------------------------------
@@ -114,7 +115,7 @@ router.post("/logout", async (req: Request, res: Response) => {
     await authService.logout(refreshToken);
   }
 
-  res.clearCookie("refreshToken", cookieOptions);
+  res.clearCookie("refreshToken", { path: "/api/auth/refresh" });
   res.status(200).json({ message: "Logged out" });
 });
 

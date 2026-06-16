@@ -8,7 +8,8 @@
 ```
 lynx/
 ├── apps/
-│   └── api/          ← Express + Prisma 7 backend  (Node 20+, ESM)
+│   ├── api/          ← Express + Prisma 7 backend  (Node 20+, ESM)
+│   └── web/          ← Next.js 16 frontend  (App Router, Tailwind v4)
 ├── docker-compose.yml
 └── AGENTS.md         ← you are here
 ```
@@ -24,10 +25,10 @@ Start infra: `docker compose up -d`
 
 ## Working in this Repo
 
-- All application code lives under `apps/api/`.
+- Backend code lives under `apps/api/`. Frontend code lives under `apps/web/`.
 - There is currently **no monorepo tooling** (no turborepo, no pnpm workspaces).  
-  Run all `npm` / `npx` commands from `apps/api/`.
-- Never commit `.env` — copy `.env.example` and fill in values.
+  Run `npm` / `npx` commands from the relevant app directory (`apps/api/` or `apps/web/`).
+- Never commit `.env` or `.env.local` — copy `.env.example` and fill in values.
 
 ---
 
@@ -392,6 +393,164 @@ npx prisma db seed
 # Open Prisma Studio
 npx prisma studio
 ```
+
+---
+
+---
+
+# Frontend Rules (`apps/web/`)
+
+This section governs **every file written or edited** inside `apps/web/`.
+
+## F1. Project Overview
+
+| Item | Value |
+|------|-------|
+| Framework | **Next.js 16.2.6** (App Router) |
+| Language | TypeScript (strict, bundler module resolution) |
+| Styling | **Tailwind CSS v4** |
+| HTTP client | axios (with custom instance at `lib/api.ts`) |
+| Env prefix | `NEXT_PUBLIC_` for client-exposed vars |
+
+---
+
+## F2. Next.js 16 — CRITICAL Conventions
+
+### App Router location
+
+The `--no-src-dir` flag was used. The App Router lives at **`apps/web/app/`**, not `apps/web/src/app/`.
+
+```
+apps/web/
+├── app/              ← App Router root (layouts, pages, loading, error)
+├── components/       ← Shared UI components
+├── lib/              ← Client-side utilities (api.ts, etc.)
+├── public/
+├── globals.css       ← Tailwind v4 entry (inside app/ if co-located)
+├── next.config.ts
+├── tsconfig.json
+└── package.json
+```
+
+### Async params (Next 15/16 breaking change)
+
+In Next 15+, dynamic route segment `params` and `searchParams` are **Promises** and must be `await`-ed before use.
+
+```tsx
+// ✅ Correct — Next 15/16
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  return <div>{slug}</div>;
+}
+
+// ❌ Wrong — Next 13/14 pattern, breaks in Next 15+
+export default function Page({ params }: { params: { slug: string } }) {
+  return <div>{params.slug}</div>;
+}
+```
+
+This applies to all dynamic segments: `[id]`, `[code]`, `[...slug]`, etc.
+
+### Server vs Client Components
+
+- All components are **Server Components by default**.
+- Add `"use client"` only when you need browser APIs, event handlers, or React state/effects.
+- Never `import` server-only modules (Prisma, Node fs, etc.) inside a `"use client"` component.
+
+---
+
+## F3. Tailwind CSS v4 — CRITICAL
+
+### No config file
+
+**Do NOT create, reference, or generate a `tailwind.config.js` or `tailwind.config.ts` file.**  
+Tailwind v4 is configured entirely through CSS.
+
+### Theme customisation — `@theme` in `globals.css`
+
+All custom colors, fonts, spacing tokens, etc. must be declared via the `@theme` directive inside `globals.css`:
+
+```css
+/* app/globals.css */
+@import "tailwindcss";
+
+@theme {
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --font-sans: 'Inter', sans-serif;
+}
+```
+
+### PostCSS setup
+
+Use `@tailwindcss/postcss` (not the old `tailwindcss` PostCSS plugin):
+
+```js
+// postcss.config.mjs
+export default {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+```
+
+### Importing Tailwind
+
+In `globals.css` use `@import "tailwindcss";` (v4 syntax), **not** the v3 `@tailwind base/components/utilities` directives.
+
+---
+
+## F4. axios Instance (`lib/api.ts`)
+
+```ts
+import axios from "axios";
+
+const instance = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  withCredentials: true,
+  headers: { "Content-Type": "application/json" },
+});
+
+export function setAuthToken(token: string | null): void {
+  if (token) {
+    instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete instance.defaults.headers.common["Authorization"];
+  }
+}
+
+export default instance;
+```
+
+- Import this instance (`import api from "@/lib/api"`) everywhere — never create a second axios instance.
+- Call `setAuthToken` from the auth context after login/token refresh.
+
+---
+
+## F5. Environment Variables
+
+| Variable | Where used | Notes |
+|----------|-----------|-------|
+| `NEXT_PUBLIC_API_URL` | `lib/api.ts` baseURL | e.g. `http://localhost:4000` |
+
+Store in `apps/web/.env.local` (never committed).
+
+---
+
+## F6. Frontend Checklist
+
+- [ ] No `tailwind.config.js` / `tailwind.config.ts` created
+- [ ] All theming done via `@theme` in `globals.css`
+- [ ] PostCSS uses `@tailwindcss/postcss`
+- [ ] `globals.css` uses `@import "tailwindcss"` (v4 syntax)
+- [ ] Dynamic route `params` typed as `Promise<...>` and `await`-ed
+- [ ] `"use client"` added only where strictly necessary
+- [ ] All API calls go through `@/lib/api` axios instance
+- [ ] No hardcoded URLs — use `NEXT_PUBLIC_API_URL`
 
 ---
 
