@@ -11,6 +11,7 @@ lynx/
 │   ├── api/          ← Express + Prisma 7 backend  (Node 20+, ESM)
 │   └── web/          ← Next.js 16 frontend  (App Router, Tailwind v4)
 ├── docker-compose.yml
+├── API.md            ← API success/error formats
 └── AGENTS.md         ← you are here
 ```
 
@@ -29,6 +30,7 @@ Start infra: `docker compose up -d`
 - There is currently **no monorepo tooling** (no turborepo, no pnpm workspaces).  
   Run `npm` / `npx` commands from the relevant app directory (`apps/api/` or `apps/web/`).
 - Never commit `.env` or `.env.local` — copy `.env.example` and fill in values.
+- Always reference [API.md](file:///c:/Users/risha/OneDrive/Documents/Padhai/Development/lynx/API.md) for API success/error formats, endpoints, and status codes. Do not hallucinate API specifications.
 
 ---
 
@@ -454,6 +456,14 @@ export default function Page({ params }: { params: { slug: string } }) {
 ```
 
 This applies to all dynamic segments: `[id]`, `[code]`, `[...slug]`, etc.
+
+### React 19 Typing Strictness
+Next.js 15/16 uses React 19 typings which are stricter:
+- **FormEvents**: `React.FormEvent` is deprecated. Use `React.SyntheticEvent<HTMLFormElement>` for form submissions.
+- **Catch blocks**: Do not explicitly type catch variables as `any` (e.g., `catch (err: any)`). Let it default to `unknown` and use type guards like `if (isAxiosError(err))` to narrow the type.
+
+### Middleware terminology
+In Next.js 16, **middleware** is now called **proxy**. Do not use the term "middleware" for request interception files at the root of `app/`; refer to them as `proxy.ts`.
 
 ### Server vs Client Components
 

@@ -7,6 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { isAxiosError } from "axios";
 import api, { setAuthToken } from "./api";
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,7 @@ interface AuthContextType {
   user: User | null;
   accessToken: string | null;
   isLoading: boolean;
+  error: string | null;
   login(email: string, password: string): Promise<void>;
   register(email: string, password: string, name?: string): Promise<void>;
   logout(): Promise<void>;
@@ -42,20 +44,41 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Rehydrate session on mount.
   useEffect(() => {
     async function restoreSession() {
       try {
+        if (!document.cookie.includes("logged_in")) {
+          setUser(null);
+          setAccessToken(null);
+          setIsLoading(false);
+          return;
+        }
         const { data } = await api.post<{ accessToken: string; user: User }>(
           "/api/auth/refresh"
         );
         setAuthToken(data.accessToken);
         setAccessToken(data.accessToken);
         setUser(data.user);
-      } catch {
+      } catch (err) {
         setUser(null);
         setAuthToken(null);
+        if (isAxiosError(err)) {
+          if (err.response?.status === 429) {
+            setError("You have been rate limited. Please wait a few minutes before trying again.");
+          } else if (err.response?.status === 401 || err.response?.status === 403) {
+            // Session is definitively dead, safe to clear the cookie
+            document.cookie = "logged_in=; Max-Age=0; path=/";
+          } else {
+            // 5xx Server Error or other API failures
+            setError("An unexpected server error occurred. Please try again later.");
+          }
+        } else {
+          // Complete network failure (e.g. no internet connection)
+          setError("Network error. Please check your internet connection.");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -117,12 +140,14 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       setAuthToken(null);
       setUser(null);
       setAccessToken(null);
+      document.cookie = "logged_in=; Max-Age=0; path=/";
+      window.location.href = "/";
     }
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, accessToken, isLoading, login, register, logout }}
+      value={{ user, accessToken, isLoading, error, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>

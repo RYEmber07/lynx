@@ -12,6 +12,12 @@ export type Url = UrlModel;
 // Public-facing URL type: passwordHash is never sent to controllers/routes.
 export type SafeUrl = Omit<Url, "passwordHash">;
 
+// Module-level map of in-flight DB queries keyed by the requested code
+// (which can be either a shortCode or a customSlug).
+// Any concurrent request for the exact same code will await the same Promise
+// instead of firing a duplicate DB query (prevents Cache Stampede).
+const pendingQueries = new Map<string, Promise<Url | null>>();
+
 /**
  * Internal shape expected by createUrl().
  * Adapts Zod input for service use: drops plain password, adds userId and passwordHash,
@@ -156,11 +162,15 @@ export async function createUrl(input: CreateUrlServiceInput): Promise<SafeUrl> 
   return safeUrl;
 }
 
-// Cache-aside pattern: check cache first, fall through to DB on miss,
-// populate cache on miss so next request is served from Redis.
+// Cache-aside pattern with Promise Deduping:
+// Check cache first. On a miss, dedupe the DB query so concurrent requests
+// for the same code share one in-flight Prisma call instead of hammering
+// Postgres simultaneously (prevents Cache Stampede / Thundering Herd).
 /**
  * Retrieves a URL record by its short code or custom slug.
  * Checks Redis before hitting the database.
+ * Concurrent requests for the same code during a cache miss share a single
+ * in-flight DB query via Promise Deduping.
  *
  * @param code - The short code or custom slug to search.
  * @returns A promise that resolves to the Url record, or null if not found.
@@ -168,31 +178,46 @@ export async function createUrl(input: CreateUrlServiceInput): Promise<SafeUrl> 
 export async function getUrlByCode(code: string): Promise<Url | null> {
   const key = cacheKey("url", code);
 
-  // 1. Cache hit - parse and return immediately
+  // 1. Cache hit — return immediately
   // Fail open: if Redis is unavailable, fall through to DB.
-  // Prefer slower service over complete outage.
   try {
     const cached = await getCache(key);
     if (cached !== null) {
       return JSON.parse(cached) as Url;
     }
   } catch {
-    // Redis unavailable - continue to DB
+    // Redis unavailable — continue to DB
   }
 
-  // 2. Cache miss - query the DB
-  const url = await prisma.url.findFirst({
-    where: {
-      OR: [{shortCode: code}, {customSlug: code}],
-    },
-  });
+  // 2. Cache miss — check if another concurrent request is already querying
+  //    the DB for this exact code. If so, await that same Promise instead of
+  //    starting a duplicate query (Promise Deduping).
+  const existing = pendingQueries.get(code);
+  if (existing !== undefined) {
+    return existing;
+  }
 
-  // 3. Populate cache for future requests (fail open: skip silently if Redis is down)
+  // 3. No in-flight query — start one and register it in the Map.
+  //    .finally() removes the entry regardless of success or failure,
+  //    preventing a stale entry from blocking future queries.
+  const queryPromise = prisma.url
+    .findFirst({
+      where: {
+        OR: [{shortCode: code}, {customSlug: code}],
+      },
+    })
+    .finally(() => pendingQueries.delete(code));
+
+  pendingQueries.set(code, queryPromise);
+
+  const url = await queryPromise;
+
+  // 4. Populate cache for future requests (fail open: skip silently if Redis is down)
   if (url !== null) {
     try {
       await setCache(key, JSON.stringify(url), env.CACHE_TTL_SECONDS);
     } catch {
-      // Redis unavailable - next request will just be a cache miss again
+      // Redis unavailable — next request will just be a cache miss again
     }
   }
 

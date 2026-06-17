@@ -1,15 +1,30 @@
-export default function Home() {
+import Link from "next/link";
+
+export default function HomePage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 p-6 text-center font-sans dark:bg-zinc-950">
-      <main className="max-w-md space-y-4">
-        <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center max-w-md">
+        <h1 className="text-6xl font-bold text-white tracking-tight mb-4">
           Lynx
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
-          A production-grade URL shortener.
+        <p className="text-lg text-gray-400 mb-10">
+          Short links. Real analytics.
         </p>
-      </main>
+        <div className="flex items-center justify-center gap-4">
+          <Link
+            href="/register"
+            className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-6 py-3 text-sm font-semibold text-white transition-colors"
+          >
+            Get Started
+          </Link>
+          <Link
+            href="/login"
+            className="rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 px-6 py-3 text-sm font-semibold text-gray-200 transition-colors"
+          >
+            Sign In
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
-

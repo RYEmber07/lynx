@@ -86,9 +86,9 @@ async function storeRefreshToken(
   // --- ZOMBIE TOKEN GUARD ---
   // select: { id: true } avoids pulling full token rows over the network
   const activeSessions = await prisma.refreshToken.findMany({
-    where: { userId },
-    orderBy: { createdAt: "asc" }, // Oldest first
-    select: { id: true },
+    where: {userId},
+    orderBy: {createdAt: "asc"}, // Oldest first
+    select: {id: true},
   });
 
   // Build the transaction query list - always includes the create.
@@ -97,9 +97,9 @@ async function storeRefreshToken(
   // a crash between the two can no longer leave a consumed slot with no new token.
   const transactionQueries = [
     ...(activeSessions.length >= MAX_SESSIONS_PER_USER
-      ? [prisma.refreshToken.delete({ where: { id: activeSessions[0]!.id } })]
+      ? [prisma.refreshToken.delete({where: {id: activeSessions[0]!.id}})]
       : []),
-    prisma.refreshToken.create({ data: { userId, tokenHash, expiresAt } }),
+    prisma.refreshToken.create({data: {userId, tokenHash, expiresAt}}),
   ];
 
   await prisma.$transaction(transactionQueries);
@@ -249,12 +249,12 @@ export async function refreshAccessToken(
   // In one trip: delete the token row and load its User relation together.
   // If the token doesn't exist Prisma throws P2025 - catch it as 401.
   // If the token is expired we still delete it (good hygiene) then reject.
-  let deleted: { expiresAt: Date; user: User };
+  let deleted: {expiresAt: Date; user: User};
   try {
-    deleted = await prisma.refreshToken.delete({
+    deleted = (await prisma.refreshToken.delete({
       where: {tokenHash},
       include: {user: true},
-    }) as { expiresAt: Date; user: User };
+    })) as {expiresAt: Date; user: User};
   } catch (err: any) {
     if (err?.code === "P2025") {
       throw new Error("Invalid refresh token");

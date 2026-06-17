@@ -24,6 +24,16 @@ const cookieOptions = {
   path: "/api/auth/refresh",
 };
 
+// Non-sensitive flag cookie readable by the Next.js proxy to gate
+// protected routes. Carries no secret data - just signals "a session exists".
+const loggedInCookieOptions = {
+  httpOnly: false,
+  secure: env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+};
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -42,6 +52,7 @@ router.post("/register", validate(RegisterSchema), async (req: Request, res: Res
     const {tokens, user} = await authService.register(email, password, name);
 
     res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
+    res.cookie("logged_in", "1", loggedInCookieOptions);
     res.status(201).json({
       accessToken: tokens.accessToken,
       user: {id: user.id, email: user.email, name: user.name},
@@ -67,6 +78,7 @@ router.post("/login", validate(LoginSchema), async (req: Request, res: Response)
     const {tokens, user} = await authService.login(email, password);
 
     res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
+    res.cookie("logged_in", "1", loggedInCookieOptions);
     res.status(200).json({
       accessToken: tokens.accessToken,
       user: {id: user.id, email: user.email, name: user.name},
@@ -97,6 +109,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
     const { tokens, user } = await authService.refreshAccessToken(refreshToken);
 
     res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
+    res.cookie("logged_in", "1", loggedInCookieOptions);
     res.status(200).json({
       accessToken: tokens.accessToken,
       user: { id: user.id, email: user.email, name: user.name }
@@ -119,6 +132,7 @@ router.post("/logout", async (req: Request, res: Response) => {
   }
 
   res.clearCookie("refreshToken", { path: "/api/auth/refresh" });
+  res.clearCookie("logged_in", { path: "/" });
   res.status(200).json({ message: "Logged out" });
 });
 
