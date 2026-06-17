@@ -5,6 +5,25 @@ import prisma from "../lib/db.js";
 import env from "../config/env.js";
 import type {UserModel} from "../generated/prisma/models/User.js";
 
+// Re-export the generated model type under the conventional name
+export type User = UserModel;
+
+// ---------------------------------------------------------------------------
+// DTOs (Data Transfer Objects)
+// ---------------------------------------------------------------------------
+
+/** Safe user shape - passwordHash is never included. */
+export type SafeUser = {
+  id: string;
+  email: string;
+  name: string | null;
+};
+
+/** Maps a raw Prisma User to a SafeUser DTO. */
+function toSafeUser(user: User): SafeUser {
+  return {id: user.id, email: user.email, name: user.name};
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -65,21 +84,25 @@ async function storeRefreshToken(
   );
 
   // --- ZOMBIE TOKEN GUARD ---
+  // select: { id: true } avoids pulling full token rows over the network
   const activeSessions = await prisma.refreshToken.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" }, // Oldest first
+    select: { id: true },
   });
 
-  // If they hit the cap, delete the oldest session to make room
-  if (activeSessions.length >= MAX_SESSIONS_PER_USER) {
-    await prisma.refreshToken.delete({
-      where: { id: activeSessions[0]!.id },
-    });
-  }
+  // Build the transaction query list - always includes the create.
+  // If at the session cap, prepend a delete of the oldest session.
+  // Both ops run in one BEGIN/COMMIT round-trip, guaranteeing atomicity:
+  // a crash between the two can no longer leave a consumed slot with no new token.
+  const transactionQueries = [
+    ...(activeSessions.length >= MAX_SESSIONS_PER_USER
+      ? [prisma.refreshToken.delete({ where: { id: activeSessions[0]!.id } })]
+      : []),
+    prisma.refreshToken.create({ data: { userId, tokenHash, expiresAt } }),
+  ];
 
-  await prisma.refreshToken.create({
-    data: {userId, tokenHash, expiresAt},
-  });
+  await prisma.$transaction(transactionQueries);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +170,7 @@ export async function register(
   email: string,
   password: string,
   name?: string,
-): Promise<{tokens: AuthTokens; user: UserModel}> {
+): Promise<{tokens: AuthTokens; user: SafeUser}> {
   const existing = await prisma.user.findUnique({where: {email}});
   if (existing !== null) {
     throw new Error("Email already in use");
@@ -165,7 +188,7 @@ export async function register(
 
   const tokens = generateTokens({userId: user.id, email: user.email});
   await storeRefreshToken(user.id, tokens.refreshToken);
-  return {tokens, user};
+  return {tokens, user: toSafeUser(user)};
 }
 
 /**
@@ -180,7 +203,7 @@ export async function register(
 export async function login(
   email: string,
   password: string,
-): Promise<{tokens: AuthTokens; user: UserModel}> {
+): Promise<{tokens: AuthTokens; user: SafeUser}> {
   const user = await prisma.user.findUnique({where: {email}});
   if (user === null) {
     throw new Error("Invalid credentials");
@@ -199,7 +222,7 @@ export async function login(
 
   const tokens = generateTokens({userId: user.id, email: user.email});
   await storeRefreshToken(user.id, tokens.refreshToken);
-  return {tokens, user};
+  return {tokens, user: toSafeUser(user)};
 }
 
 /**
@@ -212,7 +235,7 @@ export async function login(
  */
 export async function refreshAccessToken(
   refreshToken: string,
-): Promise<AuthTokens> {
+): Promise<{tokens: AuthTokens; user: SafeUser}> {
   // 1. Verify the JWT signature before touching the DB
   let payload: TokenPayload;
   try {
@@ -221,21 +244,32 @@ export async function refreshAccessToken(
     throw new Error("Invalid refresh token");
   }
 
-  // 2. Look up the hashed token in the DB
   const tokenHash = hashToken(refreshToken);
-  const stored = await prisma.refreshToken.findUnique({where: {tokenHash}});
 
-  if (stored === null || stored.expiresAt < new Date()) {
-    throw new Error("Invalid refresh token");
+  // In one trip: delete the token row and load its User relation together.
+  // If the token doesn't exist Prisma throws P2025 - catch it as 401.
+  // If the token is expired we still delete it (good hygiene) then reject.
+  let deleted: { expiresAt: Date; user: User };
+  try {
+    deleted = await prisma.refreshToken.delete({
+      where: {tokenHash},
+      include: {user: true},
+    }) as { expiresAt: Date; user: User };
+  } catch (err: any) {
+    if (err?.code === "P2025") {
+      throw new Error("Invalid refresh token");
+    }
+    throw err;
   }
 
-  // 3. Token rotation - delete old token so it can never be reused
-  await prisma.refreshToken.delete({where: {tokenHash}});
+  if (deleted.expiresAt < new Date()) {
+    throw new Error("Invalid refresh token");
+  }
 
   // 4. Issue a fresh token pair and persist the new refresh token
   const tokens = generateTokens({userId: payload.userId, email: payload.email});
   await storeRefreshToken(payload.userId, tokens.refreshToken);
-  return tokens;
+  return {tokens, user: toSafeUser(deleted.user)};
 }
 
 /**
@@ -245,6 +279,10 @@ export async function refreshAccessToken(
  */
 export async function logout(refreshToken: string): Promise<void> {
   const tokenHash = hashToken(refreshToken);
-  // deleteMany is used instead of delete so that a missing token doesn't throw error
-  await prisma.refreshToken.deleteMany({where: {tokenHash}});
+  // delete is idempotent here: P2025 (not found) is silently swallowed.
+  try {
+    await prisma.refreshToken.delete({where: {tokenHash}});
+  } catch (err: any) {
+    if (err?.code !== "P2025") throw err;
+  }
 }

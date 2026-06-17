@@ -94,10 +94,13 @@ router.post("/refresh", async (req: Request, res: Response) => {
   }
 
   try {
-    const tokens = await authService.refreshAccessToken(refreshToken);
+    const { tokens, user } = await authService.refreshAccessToken(refreshToken);
 
     res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
-    res.status(200).json({ accessToken: tokens.accessToken });
+    res.status(200).json({
+      accessToken: tokens.accessToken,
+      user: { id: user.id, email: user.email, name: user.name }
+    });
   } catch (err: any) {
     throw Object.assign(err, { statusCode: 401 });
   }
