@@ -19,8 +19,10 @@ import {validate} from "../middleware/validate.middleware.js";
 import {
   CreateUrlSchema,
   UpdateUrlSchema,
+  PaginationQuerySchema,
   type CreateUrlInput,
   type UpdateUrlInput,
+  type PaginationQuery,
 } from "../validators/url.validators.js";
 
 const router = Router();
@@ -60,13 +62,31 @@ router.post(
 
 /**
  * GET /api/urls
- * Returns all URLs belonging to the authenticated user.
+ * Returns a cursor-paginated page of URLs belonging to the authenticated user.
+ * Query params: limit (default 10, max 50), cursor (id of last seen item).
  */
-router.get("/", async (req: Request, res: Response) => {
-  const userId = req.user!.userId;
-  const urls = await getUrlsByUserId(userId);
-  res.status(200).json(urls);
-});
+router.get(
+  "/",
+  validate(PaginationQuerySchema, "query"),
+  async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const {limit, cursor} = req.query as unknown as PaginationQuery;
+    const {urls, nextCursor} = await getUrlsByUserId(userId, limit, cursor);
+    res.status(200).json({urls, nextCursor});
+  },
+);
+
+/**
+ * GET /api/urls/:id
+ * Retrieves a specific URL by ID. Ownership is verified by the verifyUrlOwnership middleware.
+ */
+router.get(
+  "/:id",
+  verifyUrlOwnership,
+  (req: Request, res: Response) => {
+    res.status(200).json(req.targetUrl);
+  },
+);
 
 /**
  * PATCH /api/urls/:id

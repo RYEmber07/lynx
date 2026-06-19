@@ -225,17 +225,36 @@ export async function getUrlByCode(code: string): Promise<Url | null> {
 }
 
 /**
- * Retrieves all URL records belonging to a specific user, ordered by creation date descending.
+ * Retrieves URL records belonging to a specific user with cursor-based pagination.
+ *
+ * Cursor pagination anchored to id prevents duplicate/skipped items when new
+ * URLs are prepended during browsing.
  *
  * @param userId - The ID of the user.
- * @returns A promise that resolves to an array of Url records.
+ * @param limit  - Maximum records to return (default 10).
+ * @param cursor - ID of the last item seen; fetches records older than this.
+ * @returns A promise that resolves to the page of SafeUrl records and the next cursor.
  */
-export async function getUrlsByUserId(userId: string): Promise<SafeUrl[]> {
-  return prisma.url.findMany({
-    where: {userId},
-    orderBy: {createdAt: "desc"},
+export async function getUrlsByUserId(
+  userId: string,
+  limit: number = 10,
+  cursor?: string,
+): Promise<{urls: SafeUrl[]; nextCursor: string | null}> {
+  const rows = await prisma.url.findMany({
+    where: {
+      userId,
+      ...(cursor !== undefined && {id: {lt: cursor}}),
+    },
+    orderBy: [{createdAt: "desc"}, {id: "desc"}],
+    take: limit + 1,
     omit: {passwordHash: true},
   });
+
+  const hasNextPage = rows.length > limit;
+  const urls = hasNextPage ? rows.slice(0, limit) : rows;
+  const nextCursor = hasNextPage ? (urls[limit - 1]!.id) : null;
+
+  return {urls, nextCursor};
 }
 
 /**

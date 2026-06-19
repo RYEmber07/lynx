@@ -121,12 +121,22 @@ export const AnalyticsQuerySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// PaginationQuerySchema
+// ---------------------------------------------------------------------------
+
+export const PaginationQuerySchema = z.object({
+  limit: z.coerce.number().min(1).max(50).default(10),
+  cursor: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 
 export type CreateUrlInput = z.infer<typeof CreateUrlSchema>;
 export type UpdateUrlInput = z.infer<typeof UpdateUrlSchema>;
 export type AnalyticsQuery = z.infer<typeof AnalyticsQuerySchema>;
+export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
 
 // ---------------------------------------------------------------------------
 // VerifyPasswordSchema

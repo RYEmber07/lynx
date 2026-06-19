@@ -1,68 +1,143 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import {useState} from "react";
+import {useRouter} from "next/navigation";
+import {useAuth} from "@/lib/auth";
+import {useUrls} from "@/hooks/useUrls";
+import CreateUrlForm from "@/components/dashboard/CreateUrlForm";
+import UrlTable from "@/components/dashboard/UrlTable";
+import Toast from "@/components/ui/Toast";
+import {copyToClipboard} from "@/lib/urls";
+import type {ShortUrl} from "@/lib/urls";
+
+type ToastState = {message: string; type: "success" | "error"} | null;
 
 export default function DashboardPage() {
   const router = useRouter();
   const auth = useAuth();
+  const {
+    urls,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    handleCreate,
+    handleDelete,
+    handleToggleActive,
+    loadMore,
+  } = useUrls();
 
-  useEffect(() => {
-    if (!auth.isLoading && auth.user === null && !auth.error) {
-      router.replace("/login");
-    }
-  }, [auth.isLoading, auth.user, auth.error, router]);
+  const [toast, setToast] = useState<ToastState>(null);
 
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({message, type});
+  };
+
+  // Auth guard
   if (auth.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <span className="h-8 w-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+        <span className="h-8 w-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
       </div>
     );
   }
 
-  if (auth.error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        <div className="max-w-md rounded-xl border border-red-900/50 bg-red-900/20 p-6 text-red-200">
-          <h2 className="text-xl font-bold mb-2 text-white">Rate Limited</h2>
-          <p>{auth.error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (auth.user === null) {
+  if (!auth.user) {
+    router.replace("/login");
     return null;
   }
 
+  // Callbacks
+  const onCreated = async (url: ShortUrl) => {
+    try {
+      await handleCreate(url as Parameters<typeof handleCreate>[0]);
+      showToast("Link created successfully", "success");
+    } catch {
+      showToast("Failed to create link", "error");
+    }
+  };
+
+  const onError = (message: string) => showToast(message, "error");
+
+  const onDelete = async (id: string) => {
+    try {
+      await handleDelete(id);
+      showToast("Link deleted", "success");
+    } catch {
+      showToast("Failed to delete link", "error");
+    }
+  };
+
+  const onToggleActive = async (id: string, isActive: boolean) => {
+    try {
+      await handleToggleActive(id, isActive);
+      showToast("Link updated", "success");
+    } catch {
+      showToast("Failed to update link", "error");
+    }
+  };
+
+  const onCopy = async (shortCode: string) => {
+    try {
+      await copyToClipboard(shortCode);
+      showToast("Copied to clipboard", "success");
+    } catch {
+      showToast("Failed to copy", "error");
+    }
+  };
+
+  const onViewAnalytics = (id: string) => {
+    router.push(`/dashboard/analytics/${id}`);
+  };
+
+  // Render
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
       {/* Navbar */}
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <span className="text-xl font-bold text-white tracking-tight">Lynx</span>
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-md px-6 py-4 flex items-center justify-between">
+        <span className="text-xl font-bold text-white tracking-tight">
+          Lynx
+        </span>
+        <span className="text-sm text-white/50 hidden sm:block">
+          {auth.user.email}
+        </span>
         <button
           onClick={async () => {
             await auth.logout();
+            router.replace("/");
           }}
-          className="rounded-lg bg-gray-800 hover:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-300 transition-colors"
+          className="rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors cursor-pointer"
         >
-          Log out
+          Logout
         </button>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 px-6 py-10 max-w-4xl mx-auto w-full">
-        <h1 className="text-2xl font-bold text-white mb-1">
-          Welcome back, {auth.user.name ?? auth.user.email}
-        </h1>
-        <p className="text-sm text-gray-500 mb-10">Manage your short links below.</p>
+      {/* Main content */}
+      <main className="flex-1 px-4 py-10 max-w-5xl mx-auto w-full flex flex-col gap-8">
+        <h1 className="text-3xl font-bold text-white">Your Links</h1>
 
-        <div className="rounded-xl border border-gray-800 bg-gray-900 px-6 py-12 text-center text-gray-500 text-sm">
-          Your links will appear here.
-        </div>
+        <CreateUrlForm onCreated={onCreated} onError={onError} />
+
+        <UrlTable
+          urls={urls}
+          isLoading={isLoading}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onDelete={onDelete}
+          onToggleActive={onToggleActive}
+          onCopy={onCopy}
+          onViewAnalytics={onViewAnalytics}
+          onLoadMore={loadMore}
+        />
       </main>
+
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
