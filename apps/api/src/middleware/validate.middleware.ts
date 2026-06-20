@@ -1,5 +1,21 @@
-import type { Request, Response, NextFunction } from "express";
-import { z } from "zod";
+import type {Request, Response, NextFunction} from "express";
+import {z} from "zod";
+
+// ---------------------------------------------------------------------------
+// Express type augmentation
+// ---------------------------------------------------------------------------
+
+declare global {
+  namespace Express {
+    interface Request {
+      validatedBody?: unknown;
+      validatedQuery?: unknown;
+      validatedParams?: unknown;
+    }
+  }
+}
+
+
 
 /**
  * Factory that returns an Express middleware which validates `req[source]`
@@ -10,8 +26,10 @@ import { z } from "zod";
  * the global error handler detect validation failures without relying on a
  * custom error class.
  *
- * On success, replaces `req[source]` with the parsed (and coerced) data so
- * that downstream handlers receive the transformed values.
+ * On success, stores the parsed (and coerced) data on `req.validatedBody`,
+ * `req.validatedQuery`, or `req.validatedParams` (depending on `source`).
+ * Downstream handlers must read from those properties instead of raw
+ * `req.body` / `req.query` / `req.params`.
  *
  * @param schema - A Zod schema to validate the request data against.
  * @param source - Which part of the request to validate (`"body"`, `"query"`, or `"params"`). Defaults to `"body"`.
@@ -35,8 +53,13 @@ export function validate(
       return;
     }
 
-    // Overwrite req[source] with coerced/transformed data
-    (req as unknown as Record<string, unknown>)[source] = result.data;
+    if (source === "body") {
+      req.validatedBody = result.data;
+    } else if (source === "query") {
+      req.validatedQuery = result.data;
+    } else if (source === "params") {
+      req.validatedParams = result.data;
+    }
     next();
   };
 }

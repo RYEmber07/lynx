@@ -44,7 +44,7 @@ router.post(
   async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     const {originalUrl, customSlug, expiresAt, isPasswordProtected, password} =
-      req.body as CreateUrlInput;
+      req.validatedBody as CreateUrlInput;
 
     // `!= null` intentionally catches both null and undefined:
     // both mean "user didn't provide a value" for these nullable optional fields.
@@ -70,7 +70,7 @@ router.get(
   validate(PaginationQuerySchema, "query"),
   async (req: Request, res: Response) => {
     const userId = req.user!.userId;
-    const {limit, cursor} = req.query as unknown as PaginationQuery;
+    const {limit, cursor} = req.validatedQuery as PaginationQuery;
     const {urls, nextCursor} = await getUrlsByUserId(userId, limit, cursor);
     res.status(200).json({urls, nextCursor});
   },
@@ -106,7 +106,7 @@ router.patch(
       isActive,
       isPasswordProtected,
       password,
-    } = req.body as UpdateUrlInput;
+    } = req.validatedBody as UpdateUrlInput;
 
     // Derive passwordHash for the service:
     //   - isPasswordProtected=false (was protected) → null  (clear protection)

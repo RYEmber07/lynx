@@ -89,7 +89,7 @@ router.post(
   validate(VerifyPasswordSchema),
   async (req: Request, res: Response) => {
     const code = req.params["code"] as string;
-    const {password} = req.body as VerifyPasswordInput;
+    const {password} = req.validatedBody as VerifyPasswordInput;
 
     const url = await verifyUrlPassword(code, password);
 

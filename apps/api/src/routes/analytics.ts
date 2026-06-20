@@ -36,7 +36,7 @@ router.get(
   "/:id/analytics",
   async (req: Request, res: Response) => {
     const urlId = req.params["id"] as string;
-    const { days } = req.query as unknown as AnalyticsQuery;
+    const { days } = req.validatedQuery as AnalyticsQuery;
 
     const analytics = await analyticsService.getUrlAnalytics(urlId, days);
     res.status(200).json(analytics);
@@ -54,7 +54,7 @@ router.get(
   "/:id/analytics/clicks",
   async (req: Request, res: Response) => {
     const urlId = req.params["id"] as string;
-    const { days } = req.query as unknown as AnalyticsQuery;
+    const { days } = req.validatedQuery as AnalyticsQuery;
 
     const clicks = await analyticsService.getClicksOverTime(urlId, days);
     res.status(200).json({clicks});
@@ -98,7 +98,7 @@ router.get(
   "/:id/analytics/countries",
   async (req: Request, res: Response) => {
     const urlId = req.params["id"] as string;
-    const { limit } = req.query as unknown as AnalyticsQuery;
+    const { limit } = req.validatedQuery as AnalyticsQuery;
 
     const countries = await analyticsService.getCountryBreakdown(
       urlId,

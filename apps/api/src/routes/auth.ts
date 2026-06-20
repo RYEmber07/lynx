@@ -46,7 +46,7 @@ const loggedInCookieOptions = {
  * @throws {Error} 409 "Email already in use" if the email is already registered.
  */
 router.post("/register", validate(RegisterSchema), async (req: Request, res: Response) => {
-  const { email, password, name } = req.body as RegisterInput;
+  const { email, password, name } = req.validatedBody as RegisterInput;
 
   try {
     const {tokens, user} = await authService.register(email, password, name);
@@ -72,7 +72,7 @@ router.post("/register", validate(RegisterSchema), async (req: Request, res: Res
  * @throws {Error} 401 "Invalid credentials" if the email/password combination is wrong.
  */
 router.post("/login", validate(LoginSchema), async (req: Request, res: Response) => {
-  const { email, password } = req.body as LoginInput;
+  const { email, password } = req.validatedBody as LoginInput;
 
   try {
     const {tokens, user} = await authService.login(email, password);
