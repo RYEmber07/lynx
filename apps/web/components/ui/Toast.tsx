@@ -6,24 +6,29 @@ interface ToastProps {
   message: string;
   type: "success" | "error";
   onClose: () => void;
+  duration?: number;
 }
 
-export default function Toast({ message, type, onClose }: ToastProps) {
+export default function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
+    const timer = setTimeout(onClose, duration);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [onClose, duration]);
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg backdrop-blur-md transition-all duration-300 ${type === "success" ? "bg-green-600/90" : "bg-red-600/90"}`}
+      className={`fixed bottom-6 right-6 z-200 animate-slide-up flex items-center gap-3 px-5 py-4 border font-mono text-[10px] uppercase tracking-widest max-w-sm shadow-machined ${
+        type === "success"
+          ? "bg-surface border-success/30 text-success"
+          : "bg-surface border-error/30 text-error"
+      }`}
     >
-      <span>{type === "success" ? "✓" : "✕"}</span>
-      <span>{message}</span>
+      <span className={`w-1.5 h-1.5 shrink-0 ${type === "success" ? "bg-success" : "bg-error"}`} />
+      {message}
       <button
         onClick={onClose}
-        className="ml-2 opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
-        aria-label="Dismiss"
+        className="ml-auto text-on-surface-variant hover:text-on-background transition-colors"
+        aria-label="Close"
       >
         ✕
       </button>

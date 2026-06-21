@@ -1,17 +1,15 @@
 "use client";
 
-import {useState} from "react";
-import {useRouter, useSearchParams} from "next/navigation";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {Eye, EyeOff} from "lucide-react";
-import {isAxiosError} from "axios";
-import {useAuth} from "@/lib/auth";
+import { isAxiosError } from "axios";
+import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const auth = useAuth();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -22,24 +20,15 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
-
     try {
       await auth.login(email, password);
-      
-      const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
-      router.push(callbackUrl);
+      router.replace("/dashboard");
     } catch (err) {
       if (isAxiosError(err)) {
-        const data = err.response?.data as { error?: string; errors?: Record<string, string[]> } | undefined;
-        if (data?.errors) {
-          setError(Object.values(data.errors).flat().join(" | "));
-        } else if (data?.error) {
-          setError(data.error);
-        } else {
-          setError("Login failed");
-        }
+        const data = err.response?.data as { error?: string } | undefined;
+        setError(data?.error ?? "Invalid credentials.");
       } else {
-        setError(err instanceof Error ? err.message : "Login failed");
+        setError(err instanceof Error ? err.message : "Login failed.");
       }
     } finally {
       setIsSubmitting(false);
@@ -47,84 +36,110 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl">
-        {/* Wordmark */}
-        <h1 className="text-4xl font-bold text-white text-center mb-8 tracking-tight">
-          Lynx
-        </h1>
-
-        <form onSubmit={handleSubmit} noValidate className="space-y-5">
-          {/* Email */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-gray-300">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              disabled={isSubmitting}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg bg-gray-800 border border-gray-700 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-              placeholder="you@example.com"
-            />
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background">
+      <div className="w-full max-w-md animate-fade-in">
+        
+        {/* Logo */}
+        <div className="mb-8 flex flex-col items-center">
+          <Link href="/" className="font-display text-4xl font-bold tracking-widest text-on-background mb-3">
+            LYNX<span className="text-primary">.</span>
+          </Link>
+          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-on-surface-variant flex items-center gap-3">
+            <span className="w-8 h-px bg-outline"></span>
+            Sign in to your account
+            <span className="w-8 h-px bg-outline"></span>
           </div>
+        </div>
 
-          {/* Password */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-gray-300">
-              Password
-            </label>
-            <div className="relative">
+        <div className="bg-surface border border-outline shadow-machined rounded-none p-8 md:p-10">
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+            
+            {/* Email */}
+            <div className="flex flex-col gap-2">
+              <label htmlFor="email" className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
+                Email address
+              </label>
               <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
+                id="email"
+                type="email"
+                autoComplete="email"
                 required
                 disabled={isSubmitting}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg bg-gray-800 border border-gray-700 px-4 py-2.5 pr-10 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                placeholder="••••••••"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full h-12 bg-surface-bright border border-outline text-on-background font-mono text-sm px-4 focus:border-primary focus:outline-none transition-colors placeholder-on-surface-variant/40 disabled:opacity-50"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
-                aria-label={showPassword ? "Hide password" : "Show password"}>
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
             </div>
-          </div>
 
-          {/* Error */}
-          {error !== null && <p className="text-sm text-red-400">{error}</p>}
+            {/* Password */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
+                  Password
+                </label>
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  disabled={isSubmitting}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full h-12 bg-surface-bright border border-outline text-on-background font-mono text-sm pl-4 pr-12 focus:border-primary focus:outline-none transition-colors placeholder-on-surface-variant/40 disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-on-surface-variant hover:text-on-background transition-colors"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" strokeWidth={2} />
+                  ) : (
+                    <Eye className="w-4 h-4" strokeWidth={2} />
+                  )}
+                </button>
+              </div>
+            </div>
 
-          {/* Submit button */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors">
-            {isSubmitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+            {/* Error */}
+            {error && (
+              <div className="p-3 bg-error/10 border border-error/20 text-error font-mono text-[10px] uppercase tracking-widest flex items-center gap-3">
+                <span className="w-1.5 h-1.5 bg-error shrink-0"></span>
+                {error}
+              </div>
+            )}
 
-        {/* Footer link */}
-        <p className="mt-6 text-center text-sm text-gray-500">
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-            Sign up
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-12 mt-2 bg-primary text-on-primary font-bold font-mono text-xs uppercase tracking-widest hover:bg-primary-container active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-3">
+                  <span className="w-3 h-3 border border-t-on-primary animate-spin rounded-none"></span>
+                  Signing in...
+                </span>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-8 flex justify-between items-center font-mono text-[10px] uppercase tracking-widest">
+          <Link href="/" className="text-on-surface-variant hover:text-on-background transition-colors">
+            ← Back
           </Link>
-        </p>
+          <Link href="/register" className="text-primary hover:text-white transition-colors">
+            Create account →
+          </Link>
+        </div>
       </div>
     </div>
   );

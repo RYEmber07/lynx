@@ -1,62 +1,57 @@
 "use client";
 
-import {useState} from "react";
-import {useRouter} from "next/navigation";
-import {useAuth} from "@/lib/auth";
-import {useUrls} from "@/hooks/useUrls";
-import CreateUrlForm from "@/components/dashboard/CreateUrlForm";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useUrls } from "@/hooks/useUrls";
+import UrlModal from "@/components/dashboard/UrlModal";
 import UrlTable from "@/components/dashboard/UrlTable";
 import Toast from "@/components/ui/Toast";
-import {copyToClipboard} from "@/lib/urls";
-import type {ShortUrl} from "@/lib/urls";
+import { copyToClipboard } from "@/lib/urls";
+import type { ShortUrl } from "@/lib/urls";
 
-type ToastState = {message: string; type: "success" | "error"} | null;
+type ToastState = { message: string; type: "success" | "error" } | null;
 
 export default function DashboardPage() {
   const router = useRouter();
-  const auth = useAuth();
   const {
     urls,
     isLoading,
     isLoadingMore,
     hasMore,
-    handleCreate,
+    error: urlsError,
+    addUrl,
+    replaceUrl,
     handleDelete,
     handleToggleActive,
+    reload,
     loadMore,
   } = useUrls();
 
   const [toast, setToast] = useState<ToastState>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingUrl, setEditingUrl] = useState<ShortUrl | undefined>(undefined);
 
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({message, type});
+  const showToast = (message: string, type: "success" | "error") => setToast({ message, type });
+
+  const openCreate = () => {
+    setEditingUrl(undefined);
+    setModalOpen(true);
   };
 
-  // Auth guard
-  if (auth.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <span className="h-8 w-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  if (!auth.user) {
-    router.replace("/login");
-    return null;
-  }
-
-  // Callbacks
-  const onCreated = async (url: ShortUrl) => {
-    try {
-      await handleCreate(url as Parameters<typeof handleCreate>[0]);
-      showToast("Link created successfully", "success");
-    } catch {
-      showToast("Failed to create link", "error");
-    }
+  const openEdit = (url: ShortUrl) => {
+    setEditingUrl(url);
+    setModalOpen(true);
   };
 
-  const onError = (message: string) => showToast(message, "error");
+  const onCreated = (url: ShortUrl) => {
+    addUrl(url);
+    showToast("Link created", "success");
+  };
+
+  const onUpdated = (url: ShortUrl) => {
+    replaceUrl(url);
+    showToast("Link updated", "success");
+  };
 
   const onDelete = async (id: string) => {
     try {
@@ -81,63 +76,74 @@ export default function DashboardPage() {
       await copyToClipboard(shortCode);
       showToast("Copied to clipboard", "success");
     } catch {
-      showToast("Failed to copy", "error");
+      showToast("Failed to copy link", "error");
     }
   };
 
-  const onViewAnalytics = (id: string) => {
-    router.push(`/dashboard/analytics/${id}`);
-  };
-
-  // Render
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
-      {/* Navbar */}
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-md px-6 py-4 flex items-center justify-between">
-        <span className="text-xl font-bold text-white tracking-tight">
-          Lynx
-        </span>
-        <span className="text-sm text-white/50 hidden sm:block">
-          {auth.user.email}
-        </span>
+    <>
+      {/* Page Header */}
+      <div className="border-b border-outline p-8 md:p-12 flex flex-col md:flex-row justify-between items-end gap-6 bg-surface">
+        <div>
+          <h1 className="font-display font-bold text-4xl mb-2">Your Links</h1>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
+            Create, manage, and track your short links.
+          </p>
+        </div>
         <button
-          onClick={async () => {
-            await auth.logout();
-            router.replace("/");
-          }}
-          className="rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors cursor-pointer"
+          onClick={openCreate}
+          className="h-12 px-8 bg-primary text-on-primary font-bold font-mono text-[11px] uppercase tracking-widest hover:bg-primary-container active:scale-[0.98] transition-all flex items-center gap-3 shrink-0"
         >
-          Logout
+          <span className="text-lg leading-none">+</span> Create Short Link
         </button>
-      </header>
+      </div>
 
-      {/* Main content */}
-      <main className="flex-1 px-4 py-10 max-w-5xl mx-auto w-full flex flex-col gap-8">
-        <h1 className="text-3xl font-bold text-white">Your Links</h1>
+      {/* URL fetch error */}
+      {urlsError && !isLoading && (
+        <div className="m-8 p-4 border border-error/30 bg-error/10 text-error font-mono text-xs flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 bg-error shrink-0" />
+            Failed to load links: {urlsError}
+          </div>
+          <button
+            onClick={reload}
+            className="font-mono text-[10px] uppercase tracking-widest border border-error/30 px-4 py-2 hover:bg-error/10 transition-colors shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
-        <CreateUrlForm onCreated={onCreated} onError={onError} />
-
+      {/* Link Table */}
+      <section className="grow">
         <UrlTable
           urls={urls}
           isLoading={isLoading}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
+          onEdit={openEdit}
           onDelete={onDelete}
           onToggleActive={onToggleActive}
           onCopy={onCopy}
-          onViewAnalytics={onViewAnalytics}
+          onViewAnalytics={(id) => router.push(`/dashboard/analytics/${id}`)}
           onLoadMore={loadMore}
         />
-      </main>
+      </section>
 
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
+      {/* ── Modals ── */}
+      {modalOpen && (
+        <UrlModal
+          onClose={() => setModalOpen(false)}
+          editUrl={editingUrl}
+          onCreated={onCreated}
+          onUpdated={onUpdated}
+          onError={(msg) => showToast(msg, "error")}
         />
       )}
-    </div>
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+    </>
   );
 }

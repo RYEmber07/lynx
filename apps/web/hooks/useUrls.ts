@@ -1,13 +1,13 @@
 "use client";
 
 import {useState, useEffect, useCallback} from "react";
-import {
-  fetchUrls,
-  createUrl,
-  deleteUrl,
-  toggleUrlActive,
-  type ShortUrl,
-} from "@/lib/urls";
+import {fetchUrls, deleteUrl, toggleUrlActive, type ShortUrl} from "@/lib/urls";
+
+function parseAxiosError(err: unknown): string {
+  const e = err as {response?: {status?: number; data?: {error?: string}}};
+  if (e.response?.status === 429) return "Too many requests. Please slow down.";
+  return e.response?.data?.error ?? "Failed to load URLs";
+}
 
 export function useUrls() {
   const [urls, setUrls] = useState<ShortUrl[]>([]);
@@ -15,49 +15,45 @@ export function useUrls() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // Data fetching
+  // ---------------------------------------------------------------------------
 
   const loadUrls = useCallback(async (cursor?: string) => {
     try {
       const {urls: page, nextCursor: nc} = await fetchUrls(cursor);
-      if (cursor === undefined) {
-        setUrls(page);
-      } else {
-        setUrls((prev) => [...prev, ...page]);
-      }
+      setUrls((prev) => cursor === undefined ? page : [...prev, ...page]);
       setNextCursor(nc);
       setHasMore(nc !== null);
       setError(null);
-    } catch (err: unknown) {
-      const axiosErr = err as {response?: {data?: {error?: string}}};
-      setError(axiosErr.response?.data?.error ?? "Failed to load URLs");
+    } catch (err) {
+      setError(parseAxiosError(err));
+      setHasMore(false);
     }
   }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    const initFetch = async () => {
+    (async () => {
       try {
         const result = await fetchUrls();
         if (!mounted) return;
         setUrls(result.urls);
         setNextCursor(result.nextCursor);
         setHasMore(result.nextCursor !== null);
-      } catch (err: unknown) {
+      } catch (err) {
         if (!mounted) return;
-        const axiosErr = err as {response?: {data?: {error?: string}}};
-        setError(axiosErr.response?.data?.error ?? "Failed to load URLs");
+        setError(parseAxiosError(err));
+        setHasMore(false);
       } finally {
         if (mounted) setIsLoading(false);
       }
-    };
+    })();
 
-    void initFetch();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   const reload = useCallback(async () => {
@@ -73,33 +69,37 @@ export function useUrls() {
     setIsLoadingMore(false);
   }, [hasMore, nextCursor, loadUrls]);
 
-  const handleCreate = useCallback(
-    async (data: {
-      originalUrl: string;
-      customSlug?: string;
-      expiresAt?: string;
-      isPasswordProtected?: boolean;
-      password?: string;
-    }): Promise<ShortUrl> => {
-      const created = await createUrl(data);
-      setUrls((prev) => [created, ...prev]);
-      return created;
-    },
-    [],
-  );
+  // ---------------------------------------------------------------------------
+  // State mutations
+  // ---------------------------------------------------------------------------
 
-  const handleDelete = useCallback(async (id: string): Promise<void> => {
-    await deleteUrl(id);
-    setUrls((prev) => prev.filter((url) => url.id !== id));
+  /** 
+   * Prepend a freshly created URL to the list. 
+   * Note: The actual API request (createUrl) is handled by UrlModal.
+   */
+  const addUrl = useCallback((url: ShortUrl) => {
+    setUrls((prev) => [url, ...prev]);
   }, []);
 
-  const handleToggleActive = useCallback(
-    async (id: string, isActive: boolean): Promise<void> => {
-      const updated = await toggleUrlActive(id, isActive);
-      setUrls((prev) => prev.map((url) => (url.id === id ? updated : url)));
-    },
-    [],
-  );
+  /** 
+   * Replace an updated URL in the list.
+   * Note: The actual API request (updateUrl) is handled by UrlModal.
+   */
+  const replaceUrl = useCallback((url: ShortUrl) => {
+    setUrls((prev) => prev.map((u) => (u.id === url.id ? url : u)));
+  }, []);
+
+  /** Delete a URL via API then remove it from the list. */
+  const handleDelete = useCallback(async (id: string) => {
+    await deleteUrl(id);
+    setUrls((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
+  /** Toggle active state via API then update the list. */
+  const handleToggleActive = useCallback(async (id: string, isActive: boolean) => {
+    const updated = await toggleUrlActive(id, isActive);
+    setUrls((prev) => prev.map((u) => (u.id === id ? updated : u)));
+  }, []);
 
   return {
     urls,
@@ -107,8 +107,8 @@ export function useUrls() {
     isLoadingMore,
     error,
     hasMore,
-    nextCursor,
-    handleCreate,
+    addUrl,
+    replaceUrl,
     handleDelete,
     handleToggleActive,
     reload,
