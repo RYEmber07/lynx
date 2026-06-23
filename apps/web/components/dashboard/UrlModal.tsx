@@ -2,7 +2,8 @@
 
 import {useState, useEffect} from "react";
 import { X, Lock, Clock } from "lucide-react";
-import {createUrl, updateUrl, type ShortUrl} from "@/lib/urls";
+import { createUrl, updateUrl, type ShortUrl } from "@/lib/urls";
+import { DISPLAY_URL } from "@/lib/constants";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,7 +160,7 @@ export default function UrlModal({onClose, editUrl, onCreated, onUpdated, onErro
                 </label>
                 <div className="flex h-12 border border-outline focus-within:border-primary transition-colors bg-surface-bright">
                   <span className="flex items-center px-4 font-mono text-[10px] text-on-surface-variant border-r border-outline tracking-widest bg-surface shrink-0">
-                    lynx.sh/
+                    {DISPLAY_URL}/
                   </span>
                   <input
                     type="text"

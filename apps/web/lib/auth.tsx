@@ -7,8 +7,8 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { isAxiosError } from "axios";
-import api, { setAuthToken } from "./api";
+import {isAxiosError} from "axios";
+import api, {setAuthToken} from "./api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,7 +40,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // Provider
 // ---------------------------------------------------------------------------
 
-export default function AuthProvider({ children }: { children: ReactNode }) {
+export default function AuthProvider({children}: {children: ReactNode}) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,8 +56,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
           return;
         }
-        const { data } = await api.post<{ accessToken: string; user: User }>(
-          "/api/auth/refresh"
+        const {data} = await api.post<{accessToken: string; user: User}>(
+          "/api/auth/refresh",
         );
         setAuthToken(data.accessToken);
         setAccessToken(data.accessToken);
@@ -67,13 +67,20 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         setAuthToken(null);
         if (isAxiosError(err)) {
           if (err.response?.status === 429) {
-            setError("You have been rate limited. Please wait a few minutes before trying again.");
-          } else if (err.response?.status === 401 || err.response?.status === 403) {
+            setError(
+              "You have been rate limited. Please wait a few minutes before trying again.",
+            );
+          } else if (
+            err.response?.status === 401 ||
+            err.response?.status === 403
+          ) {
             // Session is definitively dead, safe to clear the cookie
             document.cookie = "logged_in=; Max-Age=0; path=/";
           } else {
             // 5xx Server Error or other API failures
-            setError("An unexpected server error occurred. Please try again later.");
+            setError(
+              "An unexpected server error occurred. Please try again later.",
+            );
           }
         } else {
           // Complete network failure (e.g. no internet connection)
@@ -95,9 +102,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
    * @param password - User's plaintext password.
    */
   async function login(email: string, password: string): Promise<void> {
-    const { data } = await api.post<{ accessToken: string; user: User }>(
+    const {data} = await api.post<{accessToken: string; user: User}>(
       "/api/auth/login",
-      { email, password }
+      {email, password},
     );
     setAuthToken(data.accessToken);
     setAccessToken(data.accessToken);
@@ -115,11 +122,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   async function register(
     email: string,
     password: string,
-    name?: string
+    name?: string,
   ): Promise<void> {
-    const { data } = await api.post<{ accessToken: string; user: User }>(
+    const {data} = await api.post<{accessToken: string; user: User}>(
       "/api/auth/register",
-      { email, password, ...(name !== undefined && { name }) }
+      {email, password, ...(name !== undefined && {name})},
     );
     setAuthToken(data.accessToken);
     setAccessToken(data.accessToken);
@@ -147,8 +154,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, accessToken, isLoading, error, login, register, logout }}
-    >
+      value={{user, accessToken, isLoading, error, login, register, logout}}>
       {children}
     </AuthContext.Provider>
   );

@@ -34,7 +34,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${manrope.variable} ${jetbrainsMono.variable} dark`}>
+    <html
+      lang="en"
+      className={`${spaceGrotesk.variable} ${manrope.variable} ${jetbrainsMono.variable} dark`}>
       <body className="antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>

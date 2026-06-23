@@ -1,9 +1,9 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
+import {type ReactNode, useEffect} from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import {useRouter, usePathname} from "next/navigation";
+import {useAuth} from "@/lib/auth";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 
 function getInitials(name?: string | null, email?: string | null): string {
@@ -12,7 +12,15 @@ function getInitials(name?: string | null, email?: string | null): string {
   return "U";
 }
 
-function NavLink({ href, label, isActive }: { href: string; label: string; isActive: boolean }) {
+function NavLink({
+  href,
+  label,
+  isActive,
+}: {
+  href: string;
+  label: string;
+  isActive: boolean;
+}) {
   return (
     <li className="h-full">
       <Link
@@ -21,15 +29,14 @@ function NavLink({ href, label, isActive }: { href: string; label: string; isAct
           isActive
             ? "border-primary text-on-background"
             : "border-transparent hover:text-on-background"
-        }`}
-      >
+        }`}>
         {label}
       </Link>
     </li>
   );
 }
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default function DashboardLayout({children}: {children: ReactNode}) {
   const router = useRouter();
   const pathname = usePathname();
   const auth = useAuth();
@@ -55,14 +62,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="w-8 h-8 flex items-center justify-center bg-error/20 mb-2">
               <span className="w-3 h-3 bg-error shrink-0" />
             </div>
-            <h2 className="font-display font-bold text-2xl text-error">Connection Failed</h2>
+            <h2 className="font-display font-bold text-2xl text-error">
+              Connection Failed
+            </h2>
             <p className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant leading-relaxed">
               {auth.error}
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-6 font-mono text-[10px] uppercase tracking-widest border border-error/30 px-8 py-3 text-error hover:bg-error/20 active:scale-[0.98] transition-all"
-            >
+              className="mt-6 font-mono text-[10px] uppercase tracking-widest border border-error/30 px-8 py-3 text-error hover:bg-error/20 active:scale-[0.98] transition-all">
               Retry Connection
             </button>
           </div>
@@ -76,27 +84,28 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // auth.user is now guaranteed non-null for the rest of this component
   return (
     <div className="min-h-screen flex flex-col bg-background text-on-background">
-
       {/* ── Navbar ── */}
       <header className="border-b border-outline bg-surface sticky top-0 z-50">
         <div className="max-w-[1400px] mx-auto flex items-center h-16 border-l border-r border-outline">
           <div className="w-64 border-r border-outline h-full flex items-center px-6 shrink-0">
-            <Link href="/" className="font-display text-2xl font-bold tracking-tighter">
+            <Link
+              href="/"
+              className="font-display text-2xl font-bold tracking-tighter">
               LYNX<span className="text-primary">.</span>
             </Link>
           </div>
 
           <nav className="hidden md:flex h-full border-r border-outline px-0 items-center">
             <ul className="flex h-full font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
-              <NavLink 
-                href="/dashboard" 
-                label="Links" 
-                isActive={pathname === "/dashboard"} 
+              <NavLink
+                href="/dashboard"
+                label="Links"
+                isActive={pathname === "/dashboard"}
               />
-              <NavLink 
-                href="/dashboard/analytics" 
-                label="Analytics" 
-                isActive={pathname.startsWith("/dashboard/analytics")} 
+              <NavLink
+                href="/dashboard/analytics"
+                label="Analytics"
+                isActive={pathname.startsWith("/dashboard/analytics")}
               />
             </ul>
           </nav>
@@ -110,8 +119,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
             <button
               onClick={() => auth.logout()}
-              className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error transition-colors"
-            >
+              className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-error transition-colors">
               Logout
             </button>
           </div>
@@ -131,7 +139,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
           <ul className="flex gap-8 font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
             {["Privacy", "Terms", "API Docs"].map((l) => (
-              <li key={l} className="hover:text-primary cursor-pointer transition-colors">{l}</li>
+              <li
+                key={l}
+                className="hover:text-primary cursor-pointer transition-colors">
+                {l}
+              </li>
             ))}
           </ul>
         </div>

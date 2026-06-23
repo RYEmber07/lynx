@@ -1,8 +1,9 @@
 "use client";
 
 import {useState} from "react";
-import { Lock, X, Check, Copy, BarChart, Pencil, MinusCircle, PlusCircle, Trash2 } from "lucide-react";
+import { Lock, Clock, X, Check, Copy, BarChart, Pencil, MinusCircle, PlusCircle, Trash2 } from "lucide-react";
 import type {ShortUrl} from "@/lib/urls";
+import { DISPLAY_URL } from "@/lib/constants";
 
 interface UrlRowProps {
   url: ShortUrl;
@@ -17,6 +18,14 @@ function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", {month: "short", day: "numeric", year: "numeric"}).format(new Date(iso));
 }
 
+/** Returns a concise human-readable expiry string, e.g. "Expires Jun 30, 2025 · 14:00" */
+function formatExpiry(iso: string) {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("en-US", {month: "short", day: "numeric", year: "numeric"}).format(d);
+  const time = d.toLocaleTimeString("en-US", {hour: "2-digit", minute: "2-digit", hour12: false});
+  return `${date} · ${time}`;
+}
+
 function truncate(str: string, len: number) {
   return str.length <= len ? str : str.slice(0, len) + "…";
 }
@@ -29,8 +38,8 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isExpired = url.expiresAt ? new Date(url.expiresAt) < new Date() : false;
-  const isActive = url.isActive && !isExpired;
-  const statusLabel = !url.isActive ? "Inactive" : (isExpired ? "Expired" : "Active");
+  const effectivelyActive = url.isActive && !isExpired;
+  const statusLabel = isExpired ? "Expired" : (!url.isActive ? "Inactive" : "Active");
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -50,11 +59,11 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
       <td className="py-5 px-6">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-xs text-primary">
-            lynx.sh/{url.customSlug ?? url.shortCode}
+            {DISPLAY_URL}/{url.customSlug ?? url.shortCode}
           </span>
           {url.customSlug && (
             <span className="font-mono text-[9px] text-on-surface-variant/60">
-              lynx.sh/{url.shortCode}
+              {DISPLAY_URL}/{url.shortCode}
             </span>
           )}
           <div className="flex items-center gap-2 flex-wrap min-h-4">
@@ -71,6 +80,21 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
               </span>
             )}
           </div>
+
+          {/* Expiry indicator */}
+          {url.expiresAt && (
+            <span
+              title={isExpired ? `Expired on ${formatExpiry(url.expiresAt)}` : `Expires ${formatExpiry(url.expiresAt)}`}
+              className={`inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest ${
+                isExpired
+                  ? "text-error/70"
+                  : "text-on-surface-variant/70"
+              }`}
+            >
+              <Clock className="w-[9px] h-[9px] shrink-0" strokeWidth={2.5} />
+              {isExpired ? `Expired ${formatExpiry(url.expiresAt)}` : `Expires ${formatExpiry(url.expiresAt)}`}
+            </span>
+          )}
         </div>
       </td>
 
@@ -95,9 +119,15 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
       {/* Status */}
       <td className="py-5 px-6">
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 border font-mono text-[10px] uppercase tracking-widest ${
-          isActive ? "border-primary/30 bg-primary/10 text-primary" : "border-outline bg-surface-variant text-on-surface-variant"
+          effectivelyActive
+            ? "border-primary/30 bg-primary/10 text-primary"
+            : isExpired
+              ? "border-error/30 bg-error/10 text-error"
+              : "border-outline bg-surface-variant text-on-surface-variant"
         }`}>
-          <span className={`w-1.5 h-1.5 ${isActive ? "bg-primary" : "bg-on-surface-variant"}`} />
+          <span className={`w-1.5 h-1.5 ${
+            effectivelyActive ? "bg-primary" : isExpired ? "bg-error" : "bg-on-surface-variant"
+          }`} />
           {statusLabel}
         </span>
       </td>
@@ -143,12 +173,17 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
             </button>
 
             {/* Edit */}
-            <button onClick={() => onEdit(url)} className={ICON_BTN} title="Edit link">
+            <button onClick={() => onEdit(url)} className={ICON_BTN} title={isExpired ? "Edit to extend expiry" : "Edit link"}>
               <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
             </button>
 
-            {/* Toggle active */}
-            <button onClick={handleToggle} disabled={isToggling} className={`${ICON_BTN} disabled:opacity-50`} title={url.isActive ? "Deactivate" : "Activate"}>
+            {/* Toggle active - disable for expired links (backend enforces 410 anyway) */}
+            <button
+              onClick={handleToggle}
+              disabled={isToggling || isExpired}
+              className={`${ICON_BTN} disabled:opacity-40 disabled:cursor-not-allowed`}
+              title={isExpired ? "Link has expired" : (url.isActive ? "Deactivate" : "Activate")}
+            >
               {isToggling ? (
                 <span className="w-4 h-4 border border-t-on-background animate-spin block" />
               ) : url.isActive ? (

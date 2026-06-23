@@ -23,7 +23,7 @@ const router = Router();
  * Enqueues a click analytics job fire-and-forget before redirecting.
  *
  * @param code - The short code or custom slug to look up.
- * @throws {Error} 404 if no matching URL record is found.
+ * @returns Redirects to the original URL, or a frontend error/unlock page if invalid/protected.
  */
 router.get("/:code", async (req: Request, res: Response) => {
   const code = req.params["code"] as string;
@@ -31,13 +31,26 @@ router.get("/:code", async (req: Request, res: Response) => {
   // Prevent useless Redis/DB calls for obviously invalid paths
   // (e.g. bots scanning for /.env or /wp-login.php)
   if (!codeSchema.safeParse(code).success) {
-    throw Object.assign(new Error("URL not found"), {statusCode: 404});
+    res.redirect(302, `${env.FRONTEND_URL}/link-error?reason=not_found`);
+    return;
   }
 
   const url = await getUrlByCode(code);
 
   if (url === null) {
-    throw Object.assign(new Error("URL not found"), {statusCode: 404});
+    res.redirect(302, `${env.FRONTEND_URL}/link-error?reason=not_found`);
+    return;
+  }
+
+  // Gate: inactive or expired links redirect to frontend error page
+  if (!url.isActive) {
+    res.redirect(302, `${env.FRONTEND_URL}/link-error?reason=inactive`);
+    return;
+  }
+
+  if (url.expiresAt !== null && url.expiresAt < new Date()) {
+    res.redirect(302, `${env.FRONTEND_URL}/link-error?reason=expired`);
+    return;
   }
 
   // Gate: if password-protected, redirect to the frontend's unlock page.
