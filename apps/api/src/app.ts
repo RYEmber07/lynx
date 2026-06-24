@@ -10,6 +10,7 @@ import urlRouter from "./routes/url.js";
 import redirectRouter from "./routes/redirect.js";
 import authRouter from "./routes/auth.js";
 import analyticsRouter from "./routes/analytics.js";
+import accountAnalyticsRouter from "./routes/account-analytics.js";
 import {
   redirectLimiter,
   authLimiter,
@@ -58,6 +59,7 @@ app.use("/api/health", healthLimiter, healthRouter);
 app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/urls", urlRouter);
 app.use("/api/urls", analyticsRouter);
+app.use("/api/analytics", accountAnalyticsRouter);
 app.use("/", redirectLimiter, redirectRouter);
 
 // 404 Fallback Handler

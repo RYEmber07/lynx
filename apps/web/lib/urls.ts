@@ -9,6 +9,7 @@ export interface ShortUrl {
   isPasswordProtected: boolean;
   isActive: boolean;
   createdAt: string;
+  clickCount: number;
 }
 
 /**
@@ -111,4 +112,48 @@ export async function copyToClipboard(shortCode: string): Promise<void> {
     throw new Error("Clipboard not available in this browser context.");
   }
   await navigator.clipboard.writeText(`${baseUrl}/${shortCode}`);
+}
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+export interface BreakdownItem {
+  label: string;
+  clicks: number;
+  percentage: number;
+}
+
+export interface ClicksOverTime {
+  date: string;
+  clicks: number;
+}
+
+export interface UrlAnalytics {
+  totalClicks: number;
+  uniqueVisitors: number;
+  clicksOverTime: ClicksOverTime[];
+  devices: BreakdownItem[];
+  browsers: BreakdownItem[];
+  countries: BreakdownItem[];
+}
+
+/**
+ * Fetches the full analytics summary for a URL.
+ * @param id   - The URL record ID.
+ * @param days - Time-window: 7, 30, or 90 days (default: 30).
+ * @returns    A UrlAnalytics object with click totals, time series, and breakdowns.
+ */
+export async function getUrlAnalytics(id: string, days: number = 30): Promise<UrlAnalytics> {
+  const {data} = await api.get<UrlAnalytics>(`/api/urls/${id}/analytics`, {
+    params: { days }
+  });
+  return data;
+}
+
+export async function getAccountAnalytics(days: number = 30): Promise<UrlAnalytics> {
+  const {data} = await api.get<UrlAnalytics>(`/api/analytics`, {
+    params: { days }
+  });
+  return data;
 }

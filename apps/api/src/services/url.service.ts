@@ -12,6 +12,9 @@ export type Url = UrlModel;
 // Public-facing URL type: passwordHash is never sent to controllers/routes.
 export type SafeUrl = Omit<Url, "passwordHash">;
 
+// Type used in the Dashboard table (includes clickCount)
+export type DashboardUrl = SafeUrl & { clickCount: number };
+
 // Module-level map of in-flight DB queries keyed by the requested code
 // (which can be either a shortCode or a customSlug).
 // Any concurrent request for the exact same code will await the same Promise
@@ -233,13 +236,13 @@ export async function getUrlByCode(code: string): Promise<Url | null> {
  * @param userId - The ID of the user.
  * @param limit  - Maximum records to return (default 10).
  * @param cursor - ID of the last item seen; fetches records older than this.
- * @returns A promise that resolves to the page of SafeUrl records and the next cursor.
+ * @returns A promise that resolves to the page of DashboardUrl records and the next cursor.
  */
 export async function getUrlsByUserId(
   userId: string,
   limit: number = 10,
   cursor?: string,
-): Promise<{urls: SafeUrl[]; nextCursor: string | null}> {
+): Promise<{urls: DashboardUrl[]; nextCursor: string | null}> {
   const rows = await prisma.url.findMany({
     where: {
       userId,
@@ -248,10 +251,16 @@ export async function getUrlsByUserId(
     orderBy: [{createdAt: "desc"}, {id: "desc"}],
     take: limit + 1,
     omit: {passwordHash: true},
+    include: { _count: { select: { clicks: true } } }
   });
 
-  const hasNextPage = rows.length > limit;
-  const urls = hasNextPage ? rows.slice(0, limit) : rows;
+  const formattedRows = rows.map((r) => {
+    const { _count, ...rest } = r;
+    return { ...rest, clickCount: _count.clicks };
+  });
+
+  const hasNextPage = formattedRows.length > limit;
+  const urls = hasNextPage ? formattedRows.slice(0, limit) : formattedRows;
   const nextCursor = hasNextPage ? (urls[limit - 1]!.id) : null;
 
   return {urls, nextCursor};

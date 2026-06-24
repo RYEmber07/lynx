@@ -80,6 +80,10 @@ export default function DashboardPage() {
     }
   };
 
+  const onViewAnalytics = (id: string) => {
+    router.push(`/dashboard/analytics/${id}`);
+  };
+
   return (
     <>
       {/* Page Header */}
@@ -125,7 +129,7 @@ export default function DashboardPage() {
           onDelete={onDelete}
           onToggleActive={onToggleActive}
           onCopy={onCopy}
-          onViewAnalytics={(id) => router.push(`/dashboard/analytics/${id}`)}
+          onViewAnalytics={onViewAnalytics}
           onLoadMore={loadMore}
         />
       </section>

@@ -29,11 +29,11 @@ export type UrlAnalytics = {
 // Raw-query result shapes (BigInt counts come back from Postgres)
 // ---------------------------------------------------------------------------
 
-type RawCountResult = { count: bigint }[];
+export type RawCountResult = { count: bigint }[];
 
-type RawClicksOverTimeResult = { date: string; clicks: bigint }[];
+export type RawClicksOverTimeResult = { date: string; clicks: bigint }[];
 
-type RawBreakdownResult = { label: string; clicks: bigint }[];
+export type RawBreakdownResult = { label: string; clicks: bigint }[];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,7 +43,7 @@ type RawBreakdownResult = { label: string; clicks: bigint }[];
  * Converts a raw breakdown result into `BreakdownItem[]` by computing
  * percentages relative to the total click count across all rows.
  */
-function toBreakdownItems(rows: RawBreakdownResult): BreakdownItem[] {
+export function toBreakdownItems(rows: RawBreakdownResult): BreakdownItem[] {
   const total = rows.reduce((sum, row) => sum + Number(row.clicks), 0);
 
   return rows.map((row) => ({
@@ -69,7 +69,10 @@ export async function getTotalClicks(urlId: string): Promise<number> {
 }
 
 /**
- * Returns the number of unique visitors (distinct IPs) for the given URL.
+ * Returns the number of unique visitors (distinct IPs) for a specific URL.
+ * 
+ * TODO: For GDPR compliance and better accuracy (handling NATs/VPNs), migrate to 
+ * cookieless fingerprinting: COUNT(DISTINCT hash(IP + UserAgent + DailySalt))
  *
  * Raw SQL is required because Prisma's aggregation API does not support
  * `COUNT(DISTINCT column)`.
@@ -109,7 +112,7 @@ export async function getClicksOverTime(
       FROM "Click"
       WHERE
         "urlId"      = ${urlId}
-        AND "clickedAt" >= NOW() - (${days} || ' days')::interval
+        AND "clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY DATE("clickedAt")
       ORDER BY DATE("clickedAt") ASC
     `

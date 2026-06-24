@@ -1,46 +1,35 @@
 "use client";
 
 import {useState, useEffect} from "react";
-import {useParams, useRouter} from "next/navigation";
-import {ArrowLeft, MousePointerClick, Users, BarChart2, Globe, Monitor, AppWindow} from "lucide-react";
-import {getUrlById, getUrlAnalytics} from "@/lib/urls";
-import type {ShortUrl, UrlAnalytics} from "@/lib/urls";
+import {MousePointerClick, Users, BarChart2, Globe, Monitor, AppWindow} from "lucide-react";
+import {getAccountAnalytics} from "@/lib/urls";
+import type {UrlAnalytics} from "@/lib/urls";
 import {StatCard, BreakdownCard} from "@/components/dashboard/analytics/AnalyticsCards";
 import {ClicksChart} from "@/components/dashboard/analytics/ClicksChart";
 import {AnalyticsSkeletonGrid} from "@/components/dashboard/analytics/AnalyticsSkeletonGrid";
 
 type Days = 7 | 30 | 90;
 
-export default function AnalyticsPage() {
-  const {id} = useParams<{id: string}>();
-  const router = useRouter();
-
+export default function AccountAnalyticsPage() {
   const [days, setDays] = useState<Days>(30);
-  const [url, setUrl] = useState<ShortUrl | null>(null);
   const [analytics, setAnalytics] = useState<UrlAnalytics | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data natively inside the effect (Official React Pattern)
+  // Fetch data natively inside the effect
   useEffect(() => {
-    if (!id) return;
-
     let mounted = true;
 
     async function loadData() {
       try {
-        const [urlData, analyticsData] = await Promise.all([
-          getUrlById(id),
-          getUrlAnalytics(id, days),
-        ]);
+        const analyticsData = await getAccountAnalytics(days);
         if (mounted) {
-          setUrl(urlData);
           setAnalytics(analyticsData);
         }
       } catch {
         if (mounted) {
           setError(
-            "Failed to load analytics. The link may not exist or you may not have permission to view it.",
+            "Failed to load account analytics.",
           );
         }
       } finally {
@@ -55,9 +44,8 @@ export default function AnalyticsPage() {
     return () => {
       mounted = false;
     };
-  }, [id, days]);
+  }, [days]);
 
-  const displayCode = url?.customSlug ?? url?.shortCode ?? id;
   const DAY_OPTIONS: Days[] = [7, 30, 90];
 
   return (
@@ -65,30 +53,18 @@ export default function AnalyticsPage() {
 
       {/* ── Header ── */}
       <div className="border-b border-outline p-8 md:p-10 bg-surface flex flex-col gap-6">
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-on-background transition-colors w-fit group"
-        >
-          <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" strokeWidth={2} />
-          Back to Dashboard
-        </button>
-
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
               <BarChart2 className="w-3 h-3" strokeWidth={2} />
-              Link Analytics
+              Account Analytics
             </div>
             <h1 className="font-display text-3xl md:text-4xl font-bold text-on-background">
-              {isLoadingData && !url ? (
-                <span className="inline-block w-48 h-9 bg-surface-bright animate-pulse" />
-              ) : (
-                displayCode
-              )}
+              All Links
             </h1>
           </div>
 
-          {/* Day range toggle at Header */}
+          {/* Day range toggle moved to Header */}
           <div className="flex items-center border border-outline self-start md:self-auto">
             {DAY_OPTIONS.map((d) => (
               <button
@@ -170,7 +146,6 @@ export default function AnalyticsPage() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

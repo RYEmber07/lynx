@@ -132,6 +132,20 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
         </span>
       </td>
 
+      {/* Clicks */}
+      <td className="py-5 px-6">
+        <button
+          onClick={() => onViewAnalytics(url.id)}
+          className="group/clicks flex items-center gap-2 border border-outline px-3 py-1.5 hover:border-primary hover:bg-primary/5 transition-colors"
+          title="View analytics"
+        >
+          <BarChart className="w-3.5 h-3.5 text-on-surface-variant group-hover/clicks:text-primary transition-colors" strokeWidth={2} />
+          <span className="font-mono text-[11px] text-on-background group-hover/clicks:text-primary transition-colors">
+            {url.clickCount?.toLocaleString() ?? 0}
+          </span>
+        </button>
+      </td>
+
       {/* Actions */}
       <td className="py-5 px-6">
         {confirmDelete ? (
@@ -165,11 +179,6 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
             {/* Copy */}
             <button onClick={() => onCopy(url.shortCode)} className={ICON_BTN} title="Copy short link">
               <Copy className="w-3.5 h-3.5" strokeWidth={2} />
-            </button>
-
-            {/* Analytics */}
-            <button onClick={() => onViewAnalytics(url.id)} className={ICON_BTN} title="View analytics">
-              <BarChart className="w-3.5 h-3.5" strokeWidth={2} />
             </button>
 
             {/* Edit */}

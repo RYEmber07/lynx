@@ -17,14 +17,15 @@ interface UrlTableProps {
   onLoadMore: () => void;
 }
 
-type Column = {label: string};
+type Column = {label: string, align?: string};
 
 const COLUMNS: Column[] = [
   {label: "Short Link"},
   {label: "Destination"},
   {label: "Created"},
   {label: "Status"},
-  {label: "Actions"},
+  {label: "Clicks"},
+  {label: "Actions", align: "text-right"},
 ];
 
 function TableSkeleton() {
@@ -52,8 +53,9 @@ function TableSkeleton() {
                 <td className="py-4 px-6"><div className="h-4 w-48 bg-surface-bright border border-outline" /></td>
                 <td className="py-4 px-6"><div className="h-4 w-20 bg-surface-bright border border-outline" /></td>
                 <td className="py-4 px-6"><div className="h-5 w-16 bg-surface-bright border border-outline" /></td>
-                <td className="py-4 px-6"><div className="flex gap-2">
-                  {[...Array(5)].map((_, j) => <div key={j} className="h-7 w-7 bg-surface-bright border border-outline" />)}
+                <td className="py-4 px-6"><div className="h-5 w-16 bg-surface-bright border border-outline" /></td>
+                <td className="py-4 px-6"><div className="flex justify-end gap-2">
+                  {[...Array(4)].map((_, j) => <div key={j} className="h-7 w-7 bg-surface-bright border border-outline" />)}
                 </div></td>
               </tr>
             ))}
@@ -113,9 +115,9 @@ export default function UrlTable({
               {COLUMNS.map((col) => (
                 <th
                   key={col.label}
-                  className="py-4 px-6 font-mono text-[10px] uppercase tracking-widest font-normal"
+                  className={`py-4 px-6 font-mono text-[10px] uppercase tracking-widest font-normal ${col.align === "text-right" ? "text-right" : "text-left"}`}
                 >
-                  <span className="flex items-center gap-1.5 text-on-surface-variant">
+                  <span className={`flex items-center gap-1.5 text-on-surface-variant ${col.align === "text-right" ? "justify-end" : ""}`}>
                     {col.label}
                   </span>
                 </th>
