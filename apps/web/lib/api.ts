@@ -44,6 +44,8 @@ export function setAuthToken(token: string | null): void {
  * /api/auth/refresh means the session is definitively dead and must hit
  * the catch block immediately to redirect.
  */
+let refreshPromise: Promise<string> | null = null;
+
 instance.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -58,14 +60,23 @@ instance.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const {data} = await instance.post<{accessToken: string}>(
-          "/api/auth/refresh",
-        );
-        setAuthToken(data.accessToken);
+        if (!refreshPromise) {
+          refreshPromise = instance
+            .post<{accessToken: string}>("/api/auth/refresh")
+            .then((res) => {
+              setAuthToken(res.data.accessToken);
+              return res.data.accessToken;
+            })
+            .finally(() => {
+              refreshPromise = null;
+            });
+        }
+
+        const newAccessToken = await refreshPromise;
         // Propagate the new token to the retried request
-        originalRequest.headers["Authorization"] = `Bearer ${data.accessToken}`;
+        originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
         return instance(originalRequest);
-      } catch {
+      } catch (err) {
         // Refresh failed - clear local session and force a fresh login
         setAuthToken(null);
         if (typeof document !== "undefined") {
@@ -74,7 +85,7 @@ instance.interceptors.response.use(
         if (typeof window !== "undefined") {
           window.location.href = "/login";
         }
-        return Promise.reject(error);
+        return Promise.reject(err);
       }
     }
 

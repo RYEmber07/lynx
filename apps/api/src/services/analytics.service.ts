@@ -62,30 +62,38 @@ export function toBreakdownItems(rows: RawBreakdownResult): BreakdownItem[] {
  * Returns the total number of click events recorded for the given URL.
  *
  * @param urlId - Primary key of the URL record.
+ * @param days  - Number of past days to include (default: 30).
  * @returns Total click count.
  */
-export async function getTotalClicks(urlId: string): Promise<number> {
-  return prisma.click.count({ where: { urlId } });
+export async function getTotalClicks(urlId: string, days: number = 30): Promise<number> {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return prisma.click.count({ 
+    where: { 
+      urlId,
+      clickedAt: { gte: d }
+    } 
+  });
 }
 
 /**
- * Returns the number of unique visitors (distinct IPs) for a specific URL.
- * 
- * TODO: For GDPR compliance and better accuracy (handling NATs/VPNs), migrate to 
- * cookieless fingerprinting: COUNT(DISTINCT hash(IP + UserAgent + DailySalt))
+ * Returns the number of unique visitors (distinct fingerprints) for a specific URL.
  *
  * Raw SQL is required because Prisma's aggregation API does not support
  * `COUNT(DISTINCT column)`.
  *
  * @param urlId - Primary key of the URL record.
+ * @param days  - Number of past days to include (default: 30).
  * @returns Unique visitor count.
  */
-export async function getUniqueVisitors(urlId: string): Promise<number> {
+export async function getUniqueVisitors(urlId: string, days: number = 30): Promise<number> {
   const rows = await prisma.$queryRaw<RawCountResult>(
     Prisma.sql`
-      SELECT COUNT(DISTINCT "ipAddress")::bigint AS count
+      SELECT COUNT(DISTINCT "fingerprint")::bigint AS count
       FROM "Click"
-      WHERE "urlId" = ${urlId}
+      WHERE 
+        "urlId" = ${urlId}
+        AND "clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
     `
   );
 
@@ -126,23 +134,25 @@ export async function getClicksOverTime(
 
 /**
  * Returns click counts broken down by device type for the given URL.
- * Rows with a null device are excluded so only actionable data is returned.
+ * Rows with a null device are grouped under the label 'Unknown'.
  *
  * @param urlId - Primary key of the URL record.
+ * @param days  - Number of past days to include (default: 30).
  * @returns Array of `BreakdownItem` sorted by click count descending.
  */
 export async function getDeviceBreakdown(
-  urlId: string
+  urlId: string,
+  days: number = 30
 ): Promise<BreakdownItem[]> {
   const rows = await prisma.$queryRaw<RawBreakdownResult>(
     Prisma.sql`
       SELECT
-        device           AS label,
+        COALESCE(device, 'Unknown') AS label,
         COUNT(*)::bigint AS clicks
       FROM "Click"
       WHERE
         "urlId" = ${urlId}
-        AND device IS NOT NULL
+        AND "clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY device
       ORDER BY clicks DESC
     `
@@ -153,23 +163,25 @@ export async function getDeviceBreakdown(
 
 /**
  * Returns click counts broken down by browser for the given URL.
- * Rows with a null browser are excluded so only actionable data is returned.
+ * Rows with a null browser are grouped under the label 'Unknown'.
  *
  * @param urlId - Primary key of the URL record.
+ * @param days  - Number of past days to include (default: 30).
  * @returns Array of `BreakdownItem` sorted by click count descending.
  */
 export async function getBrowserBreakdown(
-  urlId: string
+  urlId: string,
+  days: number = 30
 ): Promise<BreakdownItem[]> {
   const rows = await prisma.$queryRaw<RawBreakdownResult>(
     Prisma.sql`
       SELECT
-        browser          AS label,
+        COALESCE(browser, 'Unknown') AS label,
         COUNT(*)::bigint AS clicks
       FROM "Click"
       WHERE
         "urlId" = ${urlId}
-        AND browser IS NOT NULL
+        AND "clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY browser
       ORDER BY clicks DESC
     `
@@ -180,25 +192,27 @@ export async function getBrowserBreakdown(
 
 /**
  * Returns click counts broken down by country for the given URL.
- * Rows with a null country are excluded. Results are capped at `limit`.
+ * Rows with a null country are grouped under the label 'Unknown'. Results are capped at `limit`.
  *
  * @param urlId - Primary key of the URL record.
+ * @param days  - Number of past days to include (default: 30).
  * @param limit - Maximum number of countries to return (default: 10).
  * @returns Array of `BreakdownItem` sorted by click count descending.
  */
 export async function getCountryBreakdown(
   urlId: string,
+  days: number = 30,
   limit: number = 10
 ): Promise<BreakdownItem[]> {
   const rows = await prisma.$queryRaw<RawBreakdownResult>(
     Prisma.sql`
       SELECT
-        country         AS label,
+        COALESCE(country, 'Unknown') AS label,
         COUNT(*)::bigint AS clicks
       FROM "Click"
       WHERE
         "urlId"  = ${urlId}
-        AND country IS NOT NULL
+        AND "clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY country
       ORDER BY clicks DESC
       LIMIT ${limit}
@@ -228,12 +242,12 @@ export async function getUrlAnalytics(
     browsers,
     countries,
   ] = await Promise.all([
-    getTotalClicks(urlId),
-    getUniqueVisitors(urlId),
+    getTotalClicks(urlId, days),
+    getUniqueVisitors(urlId, days),
     getClicksOverTime(urlId, days),
-    getDeviceBreakdown(urlId),
-    getBrowserBreakdown(urlId),
-    getCountryBreakdown(urlId),
+    getDeviceBreakdown(urlId, days),
+    getBrowserBreakdown(urlId, days),
+    getCountryBreakdown(urlId, days),
   ]);
 
   return {

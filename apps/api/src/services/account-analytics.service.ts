@@ -13,31 +13,32 @@ import {
 /**
  * Returns the total number of click events recorded for all URLs belonging to the user.
  */
-export async function getAccountTotalClicks(userId: string): Promise<number> {
+export async function getAccountTotalClicks(userId: string, days: number = 30): Promise<number> {
   const rows = await prisma.$queryRaw<RawCountResult>(
     Prisma.sql`
       SELECT COUNT(c.id)::bigint AS count
       FROM "Click" c
       JOIN "Url" u ON c."urlId" = u.id
-      WHERE u."userId" = ${userId}
+      WHERE 
+        u."userId" = ${userId}
+        AND c."clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
     `
   );
   return Number(rows[0]?.count ?? 0n);
 }
 
 /**
- * Returns the number of unique visitors (distinct IPs) across all the user's URLs.
- * 
- * TODO: For GDPR compliance and better accuracy (handling NATs/VPNs), migrate to 
- * cookieless fingerprinting: COUNT(DISTINCT hash(IP + UserAgent + DailySalt))
+ * Returns the number of unique visitors (distinct fingerprints) across all the user's URLs.
  */
-export async function getAccountUniqueVisitors(userId: string): Promise<number> {
+export async function getAccountUniqueVisitors(userId: string, days: number = 30): Promise<number> {
   const rows = await prisma.$queryRaw<RawCountResult>(
     Prisma.sql`
-      SELECT COUNT(DISTINCT c."ipAddress")::bigint AS count
+      SELECT COUNT(DISTINCT c."fingerprint")::bigint AS count
       FROM "Click" c
       JOIN "Url" u ON c."urlId" = u.id
-      WHERE u."userId" = ${userId}
+      WHERE 
+        u."userId" = ${userId}
+        AND c."clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
     `
   );
   return Number(rows[0]?.count ?? 0n);
@@ -75,18 +76,19 @@ export async function getAccountClicksOverTime(
  * Returns click counts broken down by device type for all user URLs.
  */
 export async function getAccountDeviceBreakdown(
-  userId: string
+  userId: string,
+  days: number = 30
 ): Promise<BreakdownItem[]> {
   const rows = await prisma.$queryRaw<RawBreakdownResult>(
     Prisma.sql`
       SELECT
-        c.device           AS label,
+        COALESCE(c.device, 'Unknown') AS label,
         COUNT(c.id)::bigint AS clicks
       FROM "Click" c
       JOIN "Url" u ON c."urlId" = u.id
       WHERE
         u."userId" = ${userId}
-        AND c.device IS NOT NULL
+        AND c."clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY c.device
       ORDER BY clicks DESC
     `
@@ -99,18 +101,19 @@ export async function getAccountDeviceBreakdown(
  * Returns click counts broken down by browser for all user URLs.
  */
 export async function getAccountBrowserBreakdown(
-  userId: string
+  userId: string,
+  days: number = 30
 ): Promise<BreakdownItem[]> {
   const rows = await prisma.$queryRaw<RawBreakdownResult>(
     Prisma.sql`
       SELECT
-        c.browser          AS label,
+        COALESCE(c.browser, 'Unknown') AS label,
         COUNT(c.id)::bigint AS clicks
       FROM "Click" c
       JOIN "Url" u ON c."urlId" = u.id
       WHERE
         u."userId" = ${userId}
-        AND c.browser IS NOT NULL
+        AND c."clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY c.browser
       ORDER BY clicks DESC
     `
@@ -124,18 +127,19 @@ export async function getAccountBrowserBreakdown(
  */
 export async function getAccountCountryBreakdown(
   userId: string,
+  days: number = 30,
   limit: number = 10
 ): Promise<BreakdownItem[]> {
   const rows = await prisma.$queryRaw<RawBreakdownResult>(
     Prisma.sql`
       SELECT
-        c.country         AS label,
+        COALESCE(c.country, 'Unknown') AS label,
         COUNT(c.id)::bigint AS clicks
       FROM "Click" c
       JOIN "Url" u ON c."urlId" = u.id
       WHERE
         u."userId" = ${userId}
-        AND c.country IS NOT NULL
+        AND c."clickedAt" >= CURRENT_DATE - (${days} || ' days')::interval
       GROUP BY c.country
       ORDER BY clicks DESC
       LIMIT ${limit}
@@ -160,12 +164,12 @@ export async function getAccountAnalytics(
     browsers,
     countries,
   ] = await Promise.all([
-    getAccountTotalClicks(userId),
-    getAccountUniqueVisitors(userId),
+    getAccountTotalClicks(userId, days),
+    getAccountUniqueVisitors(userId, days),
     getAccountClicksOverTime(userId, days),
-    getAccountDeviceBreakdown(userId),
-    getAccountBrowserBreakdown(userId),
-    getAccountCountryBreakdown(userId, 10),
+    getAccountDeviceBreakdown(userId, days),
+    getAccountBrowserBreakdown(userId, days),
+    getAccountCountryBreakdown(userId, days, 10),
   ]);
 
   return {

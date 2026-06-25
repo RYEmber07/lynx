@@ -50,7 +50,8 @@ router.get(
   "/devices",
   async (req: Request, res: Response) => {
     const userId = req.user!.userId;
-    const devices = await accountAnalyticsService.getAccountDeviceBreakdown(userId);
+    const { days } = req.validatedQuery as AnalyticsQuery;
+    const devices = await accountAnalyticsService.getAccountDeviceBreakdown(userId, days);
     res.status(200).json({devices});
   },
 );
@@ -62,7 +63,8 @@ router.get(
   "/browsers",
   async (req: Request, res: Response) => {
     const userId = req.user!.userId;
-    const browsers = await accountAnalyticsService.getAccountBrowserBreakdown(userId);
+    const { days } = req.validatedQuery as AnalyticsQuery;
+    const browsers = await accountAnalyticsService.getAccountBrowserBreakdown(userId, days);
     res.status(200).json({browsers});
   },
 );
@@ -74,10 +76,11 @@ router.get(
   "/countries",
   async (req: Request, res: Response) => {
     const userId = req.user!.userId;
-    const { limit } = req.validatedQuery as AnalyticsQuery;
+    const { days, limit } = req.validatedQuery as AnalyticsQuery;
 
     const countries = await accountAnalyticsService.getAccountCountryBreakdown(
       userId,
+      days,
       limit,
     );
     res.status(200).json({countries});

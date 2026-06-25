@@ -46,7 +46,7 @@ model Click {
   id        String   @id @default(cuid())
   urlId     String
   url       Url      @relation(fields: [urlId], references: [id], onDelete: Cascade)
-  ipAddress String?
+  fingerprint String?
   country   String?
   city      String?
   device    String?

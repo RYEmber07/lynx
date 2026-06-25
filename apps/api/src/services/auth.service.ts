@@ -137,10 +137,14 @@ export async function comparePassword(
  * @returns An AuthTokens object containing both tokens.
  */
 export function generateTokens(payload: TokenPayload): AuthTokens {
-  const accessToken = jwt.sign(payload, env.JWT_ACCESS_SECRET, {
+  // Inject a unique JWT ID (jti) to prevent hash collisions when concurrent
+  // refresh requests generate tokens within the same second timestamp.
+  const payloadWithJti = {...payload, jti: crypto.randomUUID()};
+
+  const accessToken = jwt.sign(payloadWithJti, env.JWT_ACCESS_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRES,
   } as jwt.SignOptions);
-  const refreshToken = jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+  const refreshToken = jwt.sign(payloadWithJti, env.JWT_REFRESH_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRES,
   } as jwt.SignOptions);
   return {accessToken, refreshToken};

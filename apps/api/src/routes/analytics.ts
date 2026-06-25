@@ -69,7 +69,8 @@ router.get(
   "/:id/analytics/devices",
   async (req: Request, res: Response) => {
     const urlId = req.params["id"] as string;
-    const devices = await analyticsService.getDeviceBreakdown(urlId);
+    const { days } = req.validatedQuery as AnalyticsQuery;
+    const devices = await analyticsService.getDeviceBreakdown(urlId, days);
     res.status(200).json({devices});
   },
 );
@@ -82,7 +83,8 @@ router.get(
   "/:id/analytics/browsers",
   async (req: Request, res: Response) => {
     const urlId = req.params["id"] as string;
-    const browsers = await analyticsService.getBrowserBreakdown(urlId);
+    const { days } = req.validatedQuery as AnalyticsQuery;
+    const browsers = await analyticsService.getBrowserBreakdown(urlId, days);
     res.status(200).json({browsers});
   },
 );
@@ -98,10 +100,11 @@ router.get(
   "/:id/analytics/countries",
   async (req: Request, res: Response) => {
     const urlId = req.params["id"] as string;
-    const { limit } = req.validatedQuery as AnalyticsQuery;
+    const { days, limit } = req.validatedQuery as AnalyticsQuery;
 
     const countries = await analyticsService.getCountryBreakdown(
       urlId,
+      days,
       limit,
     );
     res.status(200).json({countries});

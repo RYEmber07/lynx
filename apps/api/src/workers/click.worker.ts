@@ -1,6 +1,8 @@
 import {Worker} from "bullmq";
 import type {Job} from "bullmq";
 import * as UAParserLib from "ua-parser-js";
+import crypto from "crypto";
+import env from "../config/env.js";
 import prisma from "../lib/db.js";
 import {type ClickJobData, redisConnection} from "../queues/click.queue.js";
 
@@ -80,10 +82,22 @@ async function processClickJob(job: Job<ClickJobData>): Promise<void> {
   // Geolocate - wrapped inside geolocate() which never throws
   const {country, city} = await geolocate(ip);
 
+  // Generate cookieless GDPR-compliant device fingerprint
+  // HMAC(IP + UserAgent + Date, SecretSalt) guarantees uniqueness for 24h
+  // but prevents permanent tracking of users.
+  let fingerprint: string | null = null;
+  if (ip || userAgent) {
+    const raw = `${ip ?? ""}|${userAgent ?? ""}|${new Date().toDateString()}`;
+    fingerprint = crypto
+      .createHmac("sha256", env.FINGERPRINT_SALT)
+      .update(raw)
+      .digest("hex");
+  }
+
   await prisma.click.create({
     data: {
       urlId,
-      ipAddress: ip,
+      fingerprint,
       country,
       city,
       device,

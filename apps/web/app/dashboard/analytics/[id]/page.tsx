@@ -2,7 +2,7 @@
 
 import {useState, useEffect} from "react";
 import {useParams, useRouter} from "next/navigation";
-import {ArrowLeft, MousePointerClick, Users, BarChart2, Globe, Monitor, AppWindow} from "lucide-react";
+import {ArrowLeft, MousePointerClick, Users, BarChart2, Globe, Monitor, AppWindow, Lock} from "lucide-react";
 import {getUrlById, getUrlAnalytics} from "@/lib/urls";
 import type {ShortUrl, UrlAnalytics} from "@/lib/urls";
 import {StatCard, BreakdownCard} from "@/components/dashboard/analytics/AnalyticsCards";
@@ -86,6 +86,35 @@ export default function AnalyticsPage() {
                 displayCode
               )}
             </h1>
+            {url && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1 font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
+                <span className="truncate max-w-md" title={url.originalUrl}>
+                  {url.originalUrl}
+                </span>
+                {url.customSlug && (
+                  <>
+                    <span className="hidden sm:inline text-outline">•</span>
+                    <span>Code: {url.shortCode}</span>
+                  </>
+                )}
+                {url.isPasswordProtected && (
+                  <>
+                    <span className="hidden sm:inline text-outline">•</span>
+                    <span className="flex items-center gap-1 text-on-surface-variant">
+                      <Lock className="w-3 h-3" strokeWidth={2} /> Protected
+                    </span>
+                  </>
+                )}
+                {url.expiresAt && (
+                  <>
+                    <span className="hidden sm:inline text-outline">•</span>
+                    <span className="text-error">
+                      Expires: {new Date(url.expiresAt).toLocaleDateString()}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Day range toggle at Header */}
