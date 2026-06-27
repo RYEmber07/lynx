@@ -44,6 +44,7 @@ RUN npm ci --omit=dev
 # (Since Prisma outputs to src/generated, the custom client is already inside /dist!)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Security: Run the app as a non-root user to prevent container escape exploits
 RUN addgroup -S lynx && adduser -S lynx -G lynx
@@ -51,6 +52,6 @@ USER lynx
 
 EXPOSE 4000
 
-CMD ["node", "dist/app.js"]
+CMD ["node", "dist/src/app.js"]
 
 

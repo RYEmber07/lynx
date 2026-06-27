@@ -2,7 +2,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon",
-    "start": "node dist/app.js",
+    "start": "node dist/src/app.js",
     "build": "tsc"
   },
   "dependencies": {
