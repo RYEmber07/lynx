@@ -1,10 +1,13 @@
-name: "lynx"
+# Production compose - builds optimized images, no source mounts.
+# Run with: docker-compose -f docker-compose.prod.yml up -d
+
+name: "lynx-prod"
 
 services:
   postgres:
     image: postgres:16
-    ports:
-      - "127.0.0.1:5432:5432"
+    # In production, Postgres port is not exposed to the host.
+    # Only the API container can reach it via the internal network.
     environment:
       POSTGRES_DB: lynx
       POSTGRES_USER: postgres
@@ -21,8 +24,7 @@ services:
 
   redis:
     image: redis:7
-    ports:
-      - "127.0.0.1:6379:6379"
+    # In production, Redis port is not exposed to the host.
     volumes:
       - redis_data:/data
     healthcheck:
@@ -37,42 +39,43 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-      target: builder
-    container_name: lynx-api
-    ports:
-      - "4000:4000"
+      target: production
+    container_name: lynx-api-prod
     env_file:
-      - ./apps/api/.env
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/lynx
-      - REDIS_URL=redis://redis:6379
-    volumes:
-      - ./apps/api/src:/app/src
+      - .env.production
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: npm run dev
+    restart: unless-stopped
 
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
-      target: deps
-    container_name: lynx-web
-    ports:
-      - "3000:3000"
+      target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    container_name: lynx-web-prod
     environment:
-      - NODE_ENV=development
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-      - /app/.next
+      - NODE_ENV=production
     depends_on:
       - api
-    command: npm run dev
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: lynx-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
 
 volumes:
   postgres_data:

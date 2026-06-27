@@ -1,0 +1,38 @@
+# Prevents sensitive files and build artifacts from being 
+# sent to the Docker build context. Smaller context = faster builds.
+
+# Dependencies
+**/node_modules
+
+# Git
+.git
+.gitignore
+
+# Environment variables
+**/.env
+**/.env.local
+**/.env.*.local
+**/.env.production
+**/.env.example
+
+# Build outputs
+**/dist
+**/.next
+**/src/generated
+
+# Logs
+**/*.log
+
+# Docker/OS
+docker-compose*.yml
+**/Dockerfile
+.DS_Store
+
+# Testing & Docs
+**/*.test.ts
+**/*.spec.ts
+**/*.md
+.notes/
+
+# IDE
+.vscode/

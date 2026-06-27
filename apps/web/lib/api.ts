@@ -55,7 +55,9 @@ instance.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes("/api/auth/refresh")
+      !originalRequest.url?.includes("/api/auth/refresh") &&
+      !originalRequest.url?.includes("/api/auth/login") &&
+      !originalRequest.url?.includes("/api/auth/register")
     ) {
       originalRequest._retry = true;
 
