@@ -24,9 +24,12 @@ RUN npm install -g npm@11
 # Install production deps only (prisma is in dependencies, so it stays).
 RUN npm ci --omit=dev
 
-# Copy compiled output and the schema
+# Copy compiled output, the schema, and the Prisma config.
+# Prisma 7 requires prisma.config.ts to be present for migrate deploy —
+# it reads datasource.url from there (process.env.DATABASE_URL injected by Railway).
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Regenerate the Prisma client against THIS stage's node_modules.
 # prisma generate writes query engine binaries into node_modules —
