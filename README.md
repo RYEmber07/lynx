@@ -2,7 +2,7 @@
 
 A production-grade URL shortener built as a learning project covering the full spectrum of backend engineering — auth, caching, queuing, analytics, security, containerisation, and CI/CD.
 
-[![CI Pipeline](https://github.com/rishabhxchoudhary/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/rishabhxchoudhary/lynx/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/RYEmber07/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/RYEmber07/lynx/actions/workflows/ci.yml)
 
 ---
 
