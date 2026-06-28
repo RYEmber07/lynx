@@ -1,0 +1,95 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    # workflow_dispatch: lets you manually trigger a deploy
+    # from the GitHub Actions UI without pushing code.
+    # Useful for rollbacks and emergency deploys.
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/lynx-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/lynx-web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # packages: write — required to push to GitHub Container Registry.
+      # Scoped to this workflow only, not the entire repo.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        # Buildx enables build cache and multi-platform builds.
+        # We use it here for GitHub Actions cache integration.
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        # GITHUB_TOKEN is automatically provided by GitHub Actions.
+        # No manual secret setup needed for GHCR.
+
+      - name: Extract metadata for API image
+        id: api-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.API_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+        # Tags the image with both the git SHA and 'latest'.
+        # SHA tag: lynx-api:sha-abc1234 (immutable, for rollbacks)
+        # latest tag: lynx-api:latest (always current main)
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/api
+          push: true
+          target: production
+          tags: ${{ steps.api-meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+        # cache-from/cache-to: uses GitHub Actions cache for Docker
+        # layer caching. Subsequent builds reuse unchanged layers.
+        # Cuts build time from ~3 minutes to ~30 seconds on cache hit.
+
+      - name: Extract metadata for web image
+        id: web-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/web
+          push: true
+          target: production
+          tags: ${{ steps.web-meta.outputs.tags }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy summary
+        run: |
+          echo "## Deploy Complete" >> $GITHUB_STEP_SUMMARY
+          echo "API Image: ${{ env.API_IMAGE }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "Web Image: ${{ env.WEB_IMAGE }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        # GITHUB_STEP_SUMMARY writes to the Actions run summary page.
+        # Gives a clean summary of what was deployed and which commit.
