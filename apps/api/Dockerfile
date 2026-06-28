@@ -41,10 +41,11 @@ RUN npm install -g npm@11
 RUN npm ci --omit=dev
 
 # Copy the strictly necessary compiled artifacts from the builder stage
-# (Since Prisma outputs to src/generated, the custom client is already inside /dist!)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Prisma migrate deploy needs the schema file — we point to it directly
+# via DATABASE_URL env var (injected by Railway at runtime)
 
 # Security: Run the app as a non-root user to prevent container escape exploits
 RUN addgroup -S lynx && adduser -S lynx -G lynx
@@ -52,6 +53,8 @@ USER lynx
 
 EXPOSE 4000
 
-CMD ["node", "dist/src/app.js"]
+# Run migrations then start the server.
+# --schema flag points directly to the schema file, no prisma.config.ts needed.
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma && node dist/src/app.js"]
 
 
