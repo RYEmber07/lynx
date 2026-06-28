@@ -2,7 +2,7 @@
 # Stage 1: Builder
 # ---------------------------------------
 FROM node:20-alpine AS builder
-WORKDIR /app 
+WORKDIR /app
 
 # Copy package files first to leverage Docker layer caching
 COPY package*.json ./
@@ -31,21 +31,20 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy package files again for the clean production environment
+# Copy package files for a clean production install
 COPY package*.json ./
 
-# Upgrade npm here as well
+# Upgrade npm to match lockfile
 RUN npm install -g npm@11
 
-# Install ONLY production dependencies
+# Install ONLY production dependencies.
+# prisma CLI is in dependencies (not devDependencies) so it is kept here —
+# it is required to run `prisma migrate deploy` on startup.
 RUN npm ci --omit=dev
 
-# Copy the strictly necessary compiled artifacts from the builder stage
+# Copy compiled output and the prisma schema (needed for migrations)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-
-# Prisma migrate deploy needs the schema file — we point to it directly
-# via DATABASE_URL env var (injected by Railway at runtime)
 
 # Security: Run the app as a non-root user to prevent container escape exploits
 RUN addgroup -S lynx && adduser -S lynx -G lynx
@@ -53,8 +52,5 @@ USER lynx
 
 EXPOSE 4000
 
-# Run migrations then start the server.
-# --schema flag points directly to the schema file, no prisma.config.ts needed.
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma && node dist/src/app.js"]
-
-
+# Run migrations using the local prisma binary, then start the server.
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy --schema=./prisma/schema.prisma && node dist/src/app.js"]
