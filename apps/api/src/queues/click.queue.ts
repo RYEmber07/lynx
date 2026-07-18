@@ -7,9 +7,14 @@ import env from "../config/env.js";
 // blocking commands independently.
 const redisUrl = new URL(env.REDIS_URL);
 
+// BullMQ needs host/port/username/password explicitly — it cannot accept a
+// full connection string like ioredis can. Parse all auth fields from the URL
+// so Railway's password-protected Redis is authenticated correctly.
 export const redisConnection = {
   host: redisUrl.hostname,
   port: parseInt(redisUrl.port || "6379"),
+  username: redisUrl.username || "default",
+  password: redisUrl.password || undefined,
 };
 
 // ---------------------------------------------------------------------------
