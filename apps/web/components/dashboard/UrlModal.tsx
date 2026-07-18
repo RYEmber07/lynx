@@ -159,8 +159,11 @@ export default function UrlModal({onClose, editUrl, onCreated, onUpdated, onErro
                   <span className="text-outline">optional</span>
                 </label>
                 <div className="flex h-12 border border-outline focus-within:border-primary transition-colors bg-surface-bright">
-                  <span className="flex items-center px-4 font-mono text-[10px] text-on-surface-variant border-r border-outline tracking-widest bg-surface shrink-0">
-                    {DISPLAY_URL}/
+                  <span
+                    className="flex items-center px-3 font-mono text-[10px] text-on-surface-variant border-r border-outline tracking-widest bg-surface shrink-0 max-w-[45%] overflow-hidden"
+                    title={`${DISPLAY_URL}/`}
+                  >
+                    <span className="truncate">{DISPLAY_URL}/</span>
                   </span>
                   <input
                     type="text"
@@ -171,6 +174,7 @@ export default function UrlModal({onClose, editUrl, onCreated, onUpdated, onErro
                     className="w-full h-full bg-transparent border-none px-4 font-mono text-sm text-on-background outline-none placeholder-on-surface-variant/40 disabled:opacity-50"
                   />
                 </div>
+
                 {isEditMode && (
                   <p className="font-mono text-[9px] text-on-surface-variant uppercase tracking-widest">
                     Leave blank to use auto-generated code

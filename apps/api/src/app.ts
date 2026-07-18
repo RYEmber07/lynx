@@ -21,12 +21,14 @@ import {clickWorker} from "./workers/click.worker.js";
 
 const app = express();
 
-// Required once Lynx runs behind Nginx (Day 17+). Without this,
-// req.ip returns the proxy's IP for every request - breaking
-// per-IP rate limiting. 'trust proxy', 1 trusts the first proxy
-// hop (our own Nginx) to set X-Forwarded-For correctly.
+// Required once Lynx runs behind Railway's infrastructure. Railway has multiple
+// proxy hops (CDN edge → load balancer → app). Without trust proxy, req.ip
+// returns Railway's internal/edge IP (Singapore datacenter) for every request,
+// breaking per-IP rate limiting and geolocation analytics.
+// 'true' tells Express to trust all X-Forwarded-For entries and use the
+// leftmost IP, which is the real client IP injected by Railway's edge layer.
 if (env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
+  app.set("trust proxy", true);
 }
 
 // Standard middleware

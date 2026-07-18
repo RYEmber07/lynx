@@ -56,7 +56,7 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
     <tr className="group border-b border-outline hover:bg-surface-bright transition-colors">
 
       {/* Short Link + badges */}
-      <td className="py-5 px-6">
+      <td className="py-5 px-6 align-middle">
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-xs text-primary">
             {DISPLAY_URL}/{url.customSlug ?? url.shortCode}
@@ -99,7 +99,7 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
       </td>
 
       {/* Destination */}
-      <td className="py-5 px-6 max-w-[220px]">
+      <td className="py-5 px-6 max-w-[220px] align-middle">
         <a
           href={url.originalUrl}
           target="_blank"
@@ -112,12 +112,12 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
       </td>
 
       {/* Created */}
-      <td className="py-5 px-6 font-mono text-[10px] uppercase tracking-widest text-on-surface-variant whitespace-nowrap">
+      <td className="py-5 px-6 font-mono text-[10px] uppercase tracking-widest text-on-surface-variant whitespace-nowrap align-middle">
         {formatDate(url.createdAt)}
       </td>
 
       {/* Status */}
-      <td className="py-5 px-6">
+      <td className="py-5 px-6 align-middle">
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 border font-mono text-[10px] uppercase tracking-widest ${
           effectivelyActive
             ? "border-primary/30 bg-primary/10 text-primary"
@@ -133,7 +133,7 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
       </td>
 
       {/* Clicks */}
-      <td className="py-5 px-6">
+      <td className="py-5 px-6 align-middle">
         <button
           onClick={() => onViewAnalytics(url.id)}
           className="group/clicks flex items-center gap-2 border border-outline px-3 py-1.5 hover:border-primary hover:bg-primary/5 transition-colors"
@@ -147,7 +147,7 @@ export default function UrlRow({url, onEdit, onDelete, onToggleActive, onCopy, o
       </td>
 
       {/* Actions */}
-      <td className="py-5 px-6">
+      <td className="py-5 px-6 align-middle">
         {confirmDelete ? (
           <div key="confirm-bar" className="flex items-center justify-end gap-2 opacity-100">
             <span className="font-mono text-[9px] text-error uppercase tracking-widest">Delete?</span>
