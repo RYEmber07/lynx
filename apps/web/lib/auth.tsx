@@ -40,6 +40,21 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // Provider
 // ---------------------------------------------------------------------------
 
+// The proxy (proxy.ts) runs on the Vercel domain and gates /dashboard.
+// It reads the logged_in cookie, but the backend sets that cookie on the
+// Railway domain — which the Vercel server NEVER receives.
+// Solution: the frontend sets its own logged_in cookie on the Vercel domain
+// after every successful auth operation. The proxy can then read it.
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+
+function setFrontendLoggedIn() {
+  document.cookie = `logged_in=1; path=/; SameSite=Lax; Secure; Max-Age=${COOKIE_MAX_AGE}`;
+}
+
+function clearFrontendLoggedIn() {
+  document.cookie = "logged_in=; path=/; Max-Age=0";
+}
+
 export default function AuthProvider({children}: {children: ReactNode}) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -63,9 +78,12 @@ export default function AuthProvider({children}: {children: ReactNode}) {
         setAuthToken(data.accessToken);
         setAccessToken(data.accessToken);
         setUser(data.user);
+        // Set the frontend-domain cookie so the proxy can gate /dashboard.
+        setFrontendLoggedIn();
       } catch (err) {
         setUser(null);
         setAuthToken(null);
+        clearFrontendLoggedIn();
         if (isAxiosError(err)) {
           if (err.response?.status === 429) {
             setError(
@@ -111,6 +129,8 @@ export default function AuthProvider({children}: {children: ReactNode}) {
     setAuthToken(data.accessToken);
     setAccessToken(data.accessToken);
     setUser(data.user);
+    // Set the frontend-domain cookie so the proxy can gate /dashboard.
+    setFrontendLoggedIn();
   }
 
   /**
@@ -133,6 +153,8 @@ export default function AuthProvider({children}: {children: ReactNode}) {
     setAuthToken(data.accessToken);
     setAccessToken(data.accessToken);
     setUser(data.user);
+    // Set the frontend-domain cookie so the proxy can gate /dashboard.
+    setFrontendLoggedIn();
   }
 
   /**
@@ -149,7 +171,7 @@ export default function AuthProvider({children}: {children: ReactNode}) {
       setAuthToken(null);
       setUser(null);
       setAccessToken(null);
-      document.cookie = "logged_in=; Max-Age=0; path=/";
+      clearFrontendLoggedIn();
       window.location.href = "/";
     }
   }
