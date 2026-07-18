@@ -50,12 +50,13 @@ export default function AuthProvider({children}: {children: ReactNode}) {
   useEffect(() => {
     async function restoreSession() {
       try {
-        if (!document.cookie.includes("logged_in")) {
-          setUser(null);
-          setAccessToken(null);
-          setIsLoading(false);
-          return;
-        }
+        // Always attempt the refresh call — don't gate it on document.cookie.
+        // In cross-domain deployments (Vercel frontend + Railway backend),
+        // the refreshToken cookie is HttpOnly + SameSite=None, which means:
+        //   ✅ Sent automatically on every request (withCredentials: true)
+        //   ❌ NOT readable by document.cookie (third-party cookie restriction)
+        // Gating on document.cookie would always return false cross-domain,
+        // so we just try the refresh and treat a 401 as "no session".
         const {data} = await api.post<{accessToken: string; user: User}>(
           "/api/auth/refresh",
         );
@@ -74,8 +75,8 @@ export default function AuthProvider({children}: {children: ReactNode}) {
             err.response?.status === 401 ||
             err.response?.status === 403
           ) {
-            // Session is definitively dead, safe to clear the cookie
-            document.cookie = "logged_in=; Max-Age=0; path=/";
+            // No active session — this is the normal "logged out" state.
+            // Nothing to do, user stays on the public page.
           } else {
             // 5xx Server Error or other API failures
             setError(
@@ -93,6 +94,7 @@ export default function AuthProvider({children}: {children: ReactNode}) {
 
     restoreSession();
   }, []);
+
 
   /**
    * Authenticates an existing user.
