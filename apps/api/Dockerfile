@@ -6,12 +6,16 @@ COPY package*.json ./
 RUN npm install -g npm@11
 RUN npm ci
 
-# Generate Prisma client so TypeScript can compile the app.
-# The generated types in src/generated/prisma/ are required by tsc.
-COPY prisma ./prisma
+# Copy ALL source first so tsc has everything it needs.
+COPY . .
+
+# Generate Prisma client AFTER COPY so it always runs last and produces
+# a fresh, Alpine-Linux-native client. This prevents the race condition
+# where an earlier generate is overwritten by COPY, or where the local
+# Windows-generated client (with different internal paths) gets compiled
+# into dist/ and then crashes on Linux with ERR_MODULE_NOT_FOUND.
 RUN node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
-COPY . .
 RUN npm run build
 
 # ---- Stage 2: Production ----
