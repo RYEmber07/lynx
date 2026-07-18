@@ -19,7 +19,11 @@ const router = Router();
 const cookieOptions = {
   httpOnly: true,
   secure: env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  // 'none' is required when frontend (Vercel) and backend (Railway) are on
+  // different domains. 'lax' only works for same-site requests — the browser
+  // silently drops it cross-origin, making login appear to succeed but the
+  // session never persists. 'none' requires secure:true (HTTPS) to function.
+  sameSite: env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
   path: "/api/auth/refresh",
 };
@@ -29,7 +33,7 @@ const cookieOptions = {
 const loggedInCookieOptions = {
   httpOnly: false,
   secure: env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  sameSite: env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: "/",
 };
