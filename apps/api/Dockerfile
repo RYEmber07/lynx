@@ -52,5 +52,5 @@ EXPOSE 4000
 # Putting them in CMD runs them on every container restart (including
 # Railway health check restarts), not just actual deployments.
 # Set Railway Deploy Command to:
-#   node_modules/.bin/prisma migrate deploy --schema=./prisma/schema.prisma
+#   npx prisma migrate deploy
 CMD ["node", "dist/src/app.js"]

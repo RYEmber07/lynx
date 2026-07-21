@@ -1,0 +1,24 @@
+name: Cleanup Old GHCR Images
+
+on:
+  workflow_dispatch: # Allows you to trigger it manually from the Actions tab
+
+jobs:
+  delete-old-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old API images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'lynx-api'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Delete old Web images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'lynx-web'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          token: ${{ secrets.PAT_TOKEN }}

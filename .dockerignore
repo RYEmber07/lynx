@@ -9,6 +9,12 @@
 .gitignore
 
 # Environment variables
+# SECURITY: Never bake .env files into your permanent Docker Images!
+# If an image is uploaded to a registry, anyone could extract your passwords.
+# Because these are ignored during 'COPY . .', you MUST pass required build-time
+# variables (like NEXT_PUBLIC_API_URL) via 'args:' in docker-compose.prod.yml.
+# NOTE: Local Dev (docker-compose.yml) uses Volume Bind Mounts which bypass 
+# this ignore file, allowing the dev server to see the .env.local file directly.
 **/.env
 **/.env.local
 **/.env.*.local
