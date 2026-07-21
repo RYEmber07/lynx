@@ -4,6 +4,8 @@ A production-grade URL shortener built as a learning project covering the full s
 
 [![CI Pipeline](https://github.com/RYEmber07/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/RYEmber07/lynx/actions/workflows/ci.yml)
 
+> **Note:** Backend is hosted on a free-tier server and may take 30–60 seconds to wake up after a period of inactivity. Please be patient on the first load!
+
 ---
 
 ## Features
@@ -19,7 +21,7 @@ A production-grade URL shortener built as a learning project covering the full s
 - **Link expiry**, active/inactive toggling, and full CRUD for links
 - **Analytics dashboard** — click history, devices, browsers, countries
 - **Dockerized full stack** with multi-stage builds, Nginx reverse proxy, gzip compression, and immutable static asset caching
-- **CI/CD via GitHub Actions** — TypeScript type check gates Docker build; images pushed to GHCR on merge to `main`
+- **CI/CD via GitHub Actions** — TypeScript type check gates Docker build; images pushed to GHCR on merge to `main` with automated GHCR storage cleanup
 - **Cursor-based pagination** preventing duplicate rows on concurrent inserts
 
 ---
@@ -28,10 +30,10 @@ A production-grade URL shortener built as a learning project covering the full s
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Node.js 20, Express 5, TypeScript |
-| Frontend | Next.js 16 (App Router), Tailwind CSS v4 |
-| Database | PostgreSQL 16 via Prisma 7 |
-| Cache / Queue | Redis 7, ioredis, BullMQ |
+| Backend | Node.js 20, Express 5, TypeScript (Hosted on Render) |
+| Frontend | Next.js 16 (App Router), Tailwind CSS v4 (Hosted on Vercel) |
+| Database | PostgreSQL 16 via Prisma 7 (Hosted on Neon.tech) |
+| Cache / Queue | Redis 7, ioredis, BullMQ (Hosted on Upstash) |
 | Proxy | Nginx |
 | Auth | JWT (access + refresh), bcryptjs |
 | Validation | Zod 4 |
@@ -52,6 +54,7 @@ lynx/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml      ← Type check + Docker build on every PR
+│       ├── cleanup.yml ← Manual workflow to delete old GHCR package versions
 │       └── deploy.yml  ← Build + push to GHCR on merge to main
 ├── docker-compose.yml        ← Local development
 ├── docker-compose.prod.yml   ← Production (full stack with Nginx)

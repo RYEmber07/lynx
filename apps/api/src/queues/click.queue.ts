@@ -15,6 +15,7 @@ export const redisConnection = {
   port: parseInt(redisUrl.port || "6379"),
   username: redisUrl.username || "default",
   password: redisUrl.password || undefined,
+  tls: redisUrl.protocol === "rediss:" ? {} : undefined,
 };
 
 // ---------------------------------------------------------------------------
