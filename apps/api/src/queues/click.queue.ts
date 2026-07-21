@@ -1,22 +1,21 @@
 import {Queue} from "bullmq";
+import {Redis} from "ioredis";
 import env from "../config/env.js";
+import type {ConnectionOptions} from "bullmq";
 
-// BullMQ requires its own Redis connection config (host + port) and manages
-// its own internal connection pool. It cannot share the ioredis singleton
-// used for caching because BullMQ needs to control reconnect behaviour and
-// blocking commands independently.
-const redisUrl = new URL(env.REDIS_URL);
-
-// BullMQ needs host/port/username/password explicitly — it cannot accept a
-// full connection string like ioredis can. Parse all auth fields from the URL
-// so Railway's password-protected Redis is authenticated correctly.
-export const redisConnection = {
-  host: redisUrl.hostname,
-  port: parseInt(redisUrl.port || "6379"),
-  username: redisUrl.username || "default",
-  password: redisUrl.password || undefined,
-  tls: redisUrl.protocol === "rediss:" ? {} : undefined,
-};
+// Pass the full connection string directly to ioredis — do NOT hand-parse it.
+// Railway's Redis passwords happened to be simple alphanumeric strings that
+// survived new URL() parsing. Upstash passwords are high-entropy strings that
+// often contain characters like %, /, +, = or : which new URL() silently
+// mangles via percent-decoding, causing BullMQ to authenticate with garbage
+// credentials. ioredis parses the raw connection string internally and handles
+// all of this correctly, including the rediss:// TLS protocol.
+//
+// maxRetriesPerRequest: null is required by BullMQ — it uses long-lived
+// blocking commands (BLPOP) and must not have per-request retry limits.
+export const redisConnection = new Redis(env.REDIS_URL, {
+  maxRetriesPerRequest: null,
+}) as unknown as ConnectionOptions;
 
 // ---------------------------------------------------------------------------
 // Job data type
